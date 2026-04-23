@@ -3,6 +3,7 @@ import shutil
 import logging
 from datetime import datetime
 from pathlib import Path
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import BackupJob
 from app.engine.stack_exporter import StackExporter
