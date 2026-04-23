@@ -19,7 +19,11 @@ from fastapi.responses import HTMLResponse
 
 @router.get("", response_model=List[StackInfo])
 async def list_stacks(request: Request):
-    async with httpx.AsyncClient(timeout=10.0, verify=(settings.PORTAINER_SSL_VERIFY.lower() == "true")) as client:
+    # Debug: Print SSL verify setting
+    ssl_verify = settings.PORTAINER_SSL_VERIFY.lower() == "true"
+    print(f"DEBUG: PORTAINER_SSL_VERIFY raw='{settings.PORTAINER_SSL_VERIFY}', calculated={ssl_verify}")
+    
+    async with httpx.AsyncClient(timeout=10.0, verify=ssl_verify) as client:
         try:
             resp = await client.get(
                 f"{settings.PORTAINER_URL.rstrip('/')}/api/stacks",

@@ -3,6 +3,8 @@ version: '3.8'
 services:
   backup-companion:
     build: .
+    labels:
+      - "version=1.0.1"
     container_name: portainer-backup-companion
     restart: unless-stopped
     ports:
