@@ -4,15 +4,16 @@ from pathlib import Path
 from app.exceptions import PortainerAuthError, PortainerStackNotFoundError, PortainerConnectionError
 
 class StackExporter:
-    def __init__(self, portainer_url: str, api_token: str):
+    def __init__(self, portainer_url: str, api_token: str, ssl_verify: bool = True):
         self.base_url = portainer_url.rstrip("/")
         self.headers = {"X-API-Key": api_token}
+        self.ssl_verify = ssl_verify
 
     async def export(self, stack_id: str, output_dir: Path):
         stack_dir = output_dir / "stack"
         stack_dir.mkdir(parents=True, exist_ok=True)
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, verify=self.ssl_verify) as client:
             try:
                 # 1. Get Stack Details
                 resp = await client.get(f"{self.base_url}/api/stacks/{stack_id}", headers=self.headers)

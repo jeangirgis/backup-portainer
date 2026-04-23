@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     # Required
     PORTAINER_URL: str
     PORTAINER_API_TOKEN: str
+    PORTAINER_SSL_VERIFY: bool = True
     SECRET_KEY: str
 
     # Storage

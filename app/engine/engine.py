@@ -17,7 +17,11 @@ logger = logging.getLogger(__name__)
 class BackupEngine:
     def __init__(self):
         self.settings = get_settings()
-        self.stack_exporter = StackExporter(self.settings.PORTAINER_URL, self.settings.PORTAINER_API_TOKEN)
+        self.stack_exporter = StackExporter(
+            self.settings.PORTAINER_URL, 
+            self.settings.PORTAINER_API_TOKEN,
+            ssl_verify=self.settings.PORTAINER_SSL_VERIFY
+        )
         self.volume_exporter = VolumeExporter()
         self.packager = Packager()
         self.storage = self.settings.get_storage_driver()

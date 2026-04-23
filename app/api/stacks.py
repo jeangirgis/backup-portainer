@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse
 
 @router.get("", response_model=List[StackInfo])
 async def list_stacks(request: Request):
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=10.0, verify=settings.PORTAINER_SSL_VERIFY) as client:
         try:
             resp = await client.get(
                 f"{settings.PORTAINER_URL.rstrip('/')}/api/stacks",
@@ -68,7 +68,7 @@ async def list_stacks(request: Request):
 
 @router.get("/{stack_id}", response_model=StackInfo)
 async def get_stack(stack_id: str):
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=10.0, verify=settings.PORTAINER_SSL_VERIFY) as client:
         try:
             resp = await client.get(
                 f"{settings.PORTAINER_URL.rstrip('/')}/api/stacks/{stack_id}",
