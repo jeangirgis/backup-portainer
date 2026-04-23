@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings | Portainer Backup Companion</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Portainer Backup Companion</h1>
+            <nav>
+                <a href="index.html">Dashboard</a>
+                <a href="backups.html">History</a>
+                <a href="schedules.html">Schedules</a>
+                <a href="settings.html" class="active">Settings</a>
+            </nav>
+        </header>
+
+        <main style="max-width: 800px; margin: 0 auto;">
+            <div class="card" style="margin-bottom: 2rem;">
+                <h3 style="margin-bottom: 1.5rem;">Authentication</h3>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">Companion Secret Key</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="password" id="secret-key-input" style="flex: 1; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.5rem; color: white;">
+                        <button class="btn btn-primary" onclick="saveSecretKey(document.getElementById('secret-key-input').value)">Save</button>
+                    </div>
+                    <p style="font-size: 0.625rem; color: var(--text-muted); margin-top: 0.5rem;">This key must match the <code>SECRET_KEY</code> environment variable.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-bottom: 1.5rem;">System Configuration</h3>
+                <div id="settings-info" hx-get="/api/settings" hx-trigger="load">
+                    <div class="spinner"></div>
+                </div>
+                
+                <hr style="border: 0; border-top: 1px solid var(--border); margin: 2rem 0;">
+                
+                <button class="btn btn-outline" hx-post="/api/settings/test" hx-target="#test-result">
+                    Test Portainer Connection
+                </button>
+                <div id="test-result" style="margin-top: 1rem;"></div>
+            </div>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

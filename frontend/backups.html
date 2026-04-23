@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>History | Portainer Backup Companion</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Portainer Backup Companion</h1>
+            <nav>
+                <a href="index.html">Dashboard</a>
+                <a href="backups.html" class="active">History</a>
+                <a href="schedules.html">Schedules</a>
+                <a href="settings.html">Settings</a>
+            </nav>
+        </header>
+
+        <main>
+            <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h2>Backup History</h2>
+                <button class="btn btn-outline" hx-get="/api/backups" hx-target="#backup-list" hx-swap="innerHTML">
+                    Refresh
+                </button>
+            </div>
+
+            <div class="card" style="padding: 0; overflow: hidden;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Stack Name</th>
+                            <th>Status</th>
+                            <th>Size</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="backup-list" hx-get="/api/backups" hx-trigger="load">
+                        <tr>
+                            <td colspan="5" style="text-align: center; padding: 3rem;">
+                                <div class="spinner" style="margin: 0 auto 1rem;"></div>
+                                Loading history...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

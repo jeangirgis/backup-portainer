@@ -1,0 +1,9 @@
+class PortainerAuthError(Exception): pass
+class PortainerStackNotFoundError(Exception): pass
+class PortainerConnectionError(Exception): pass
+class DockerSocketError(Exception): pass
+class StorageFullError(Exception): pass
+class S3AuthError(Exception): pass
+class S3BucketError(Exception): pass
+class SFTPConnectionError(Exception): pass
+class BackupEngineError(Exception): pass

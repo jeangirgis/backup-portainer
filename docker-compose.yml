@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  backup-companion:
+    build: .
+    container_name: portainer-backup-companion
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8765}:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - backup_data:/backups
+    environment:
+      - PORTAINER_URL=${PORTAINER_URL}
+      - PORTAINER_API_TOKEN=${PORTAINER_API_TOKEN}
+      - SECRET_KEY=${SECRET_KEY}
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
+      - LOCAL_BACKUP_DIR=/backups
+      # Optional: S3 / SFTP configs can be added here as well if needed
+      # - S3_BUCKET=${S3_BUCKET}
+      # ...
+
+volumes:
+  backup_data:

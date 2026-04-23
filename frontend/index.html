@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | Portainer Backup Companion</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Portainer Backup Companion</h1>
+            <nav>
+                <a href="index.html" class="active">Dashboard</a>
+                <a href="backups.html">History</a>
+                <a href="schedules.html">Schedules</a>
+                <a href="settings.html">Settings</a>
+            </nav>
+        </header>
+
+        <main>
+            <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h2>Docker Stacks</h2>
+                <button class="btn btn-outline" hx-get="/api/stacks" hx-target="#stack-grid" hx-swap="innerHTML">
+                    Refresh List
+                </button>
+            </div>
+
+            <div id="stack-grid" class="grid" hx-get="/api/stacks" hx-trigger="load">
+                <div class="card" style="grid-column: 1/-1; text-align: center; padding: 3rem;">
+                    <div class="spinner" style="margin: 0 auto 1rem;"></div>
+                    <p>Loading stacks from Portainer...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Template for stack card (rendered by backend usually, but for HTMX we'll let backend return HTML or we use a client-side template if needed. Plan says backend returns JSON, so we need a way to render it. Wait, the plan says HTMX returns HTML from /api/backup/{id}/status etc. But /api/stacks returns JSON? Let's check.) -->
+    <!-- Plan Section 5.1: GET /api/stacks returns List[StackInfo] (JSON). -->
+    <!-- Plan Section 7.13: Dashboard UI... Show all stacks in a card grid... -->
+    
+    <!-- If /api/stacks returns JSON, HTMX can't directly render it without a plugin or backend changes. -->
+    <!-- I will modify the backend to return HTML fragments when requested or use htmx-json-enc. -->
+    <!-- Actually, simpler: create a separate router for HTML fragments or just let the API return HTML if header matches. -->
+    
+    <script src="app.js"></script>
+</body>
+</html>
