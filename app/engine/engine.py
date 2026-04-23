@@ -91,17 +91,24 @@ class BackupEngine:
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
     def _get_stack_volumes(self, stack_name: str) -> list:
-        # Simple heuristic: find volumes where name starts with stack name
-        # In production, we'd inspect the containers.
+        # The PRO way: Use Docker labels to find volumes belonging to this stack
         volumes = []
         try:
             client = self.volume_exporter.client
-            for vol in client.volumes.list():
-                # Check for common naming patterns in Docker Compose
-                if (vol.name.startswith(f"{stack_name}_") or 
-                    vol.name.startswith(f"{stack_name}-") or 
-                    vol.name == stack_name):
-                    volumes.append(vol.name)
-        except:
-            pass
+            
+            # List volumes and filter by the 'com.docker.compose.project' label
+            # This is the most accurate way to find volumes for a stack.
+            for vol in client.volumes.list(filters={"label": f"com.docker.compose.project={stack_name}"}):
+                volumes.append(vol.name)
+            
+            # Fallback heuristic if no labels are found
+            if not volumes:
+                for vol in client.volumes.list():
+                    if (vol.name.startswith(f"{stack_name}_") or 
+                        vol.name.startswith(f"{stack_name}-") or 
+                        vol.name == stack_name):
+                        volumes.append(vol.name)
+        except Exception as e:
+            logger.error(f"Error finding volumes for stack {stack_name}: {e}")
+        
         return volumes
