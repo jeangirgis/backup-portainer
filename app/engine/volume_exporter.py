@@ -21,9 +21,15 @@ class VolumeExporter:
         for vol_name in volume_names:
             try:
                 logger.info(f"Exporting volume: {vol_name}")
+                
+                # Explicitly pull alpine to ensure it exists
+                try:
+                    self.client.images.get("alpine")
+                except docker.errors.ImageNotFound:
+                    logger.info("Pulling alpine image for volume export...")
+                    self.client.images.pull("alpine")
+
                 # Create a temporary container to access the volume
-                # Note: We use alpine image. User might need to pull it first, 
-                # but docker-py will try to pull it if missing.
                 container = self.client.containers.create(
                     "alpine",
                     command="sleep 3600",

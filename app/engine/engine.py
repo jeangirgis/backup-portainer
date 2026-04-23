@@ -95,9 +95,11 @@ class BackupEngine:
         volumes = []
         try:
             client = self.volume_exporter.client
+            # Docker Compose always converts project names to lowercase
+            normalized_name = stack_name.lower()
             
             # Find all containers that belong to this stack/project
-            containers = client.containers.list(all=True, filters={"label": f"com.docker.compose.project={stack_name}"})
+            containers = client.containers.list(all=True, filters={"label": f"com.docker.compose.project={normalized_name}"})
             
             for container in containers:
                 # Look at the 'Mounts' (volumes) for each container
@@ -110,15 +112,15 @@ class BackupEngine:
 
             # Fallback to labels if no containers found or no mounts found
             if not volumes:
-                for vol in client.volumes.list(filters={"label": f"com.docker.compose.project={stack_name}"}):
+                for vol in client.volumes.list(filters={"label": f"com.docker.compose.project={normalized_name}"}):
                     volumes.append(vol.name)
             
             # Final fallback to name matching
             if not volumes:
                 for vol in client.volumes.list():
-                    if (vol.name.startswith(f"{stack_name}_") or 
-                        vol.name.startswith(f"{stack_name}-") or 
-                        vol.name == stack_name):
+                    if (vol.name.startswith(f"{normalized_name}_") or 
+                        vol.name.startswith(f"{normalized_name}-") or 
+                        vol.name == normalized_name):
                         volumes.append(vol.name)
         except Exception as e:
             logger.error(f"Error finding volumes for stack {stack_name}: {e}")
