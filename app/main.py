@@ -30,6 +30,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.responses import JSONResponse
+
 # Simple Bearer Token Middleware
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
@@ -48,11 +50,14 @@ async def auth_middleware(request: Request, call_next):
     # Check Authorization header
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
     
-    token = auth_header.split(" ")[1]
-    if token != settings.SECRET_KEY:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    try:
+        token = auth_header.split(" ")[1]
+        if token != settings.SECRET_KEY:
+            return JSONResponse(status_code=401, content={"detail": "Invalid token"})
+    except Exception:
+        return JSONResponse(status_code=401, content={"detail": "Invalid token format"})
     
     return await call_next(request)
 
