@@ -45,7 +45,7 @@ async def get_settings_info(request: Request):
 
 @router.post("/test")
 async def test_connection(request: Request):
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with httpx.AsyncClient(timeout=5.0, verify=(settings.PORTAINER_SSL_VERIFY.lower() == "true")) as client:
         try:
             resp = await client.get(
                 f"{settings.PORTAINER_URL.rstrip('/')}/api/system/status",

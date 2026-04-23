@@ -13,7 +13,7 @@ class StackExporter:
         stack_dir = output_dir / "stack"
         stack_dir.mkdir(parents=True, exist_ok=True)
 
-        async with httpx.AsyncClient(timeout=30.0, verify=self.ssl_verify) as client:
+        async with httpx.AsyncClient(timeout=30.0, verify=(str(self.ssl_verify).lower() == "true")) as client:
             try:
                 # 1. Get Stack Details
                 resp = await client.get(f"{self.base_url}/api/stacks/{stack_id}", headers=self.headers)

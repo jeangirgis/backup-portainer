@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     # Required
     PORTAINER_URL: str
     PORTAINER_API_TOKEN: str
-    PORTAINER_SSL_VERIFY: bool = True
+    PORTAINER_SSL_VERIFY: str = "true"  # Use string to be safe with Docker env vars
     SECRET_KEY: str
 
     # Storage
