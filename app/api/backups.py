@@ -60,7 +60,7 @@ async def list_backups(request: Request, db: AsyncSession = Depends(get_db)):
                 <td style="color: var(--text-muted);">{date_str}</td>
                 <td>
                     <div style="display: flex; gap: 0.5rem;">
-                        {f'<a href="/api/backups/{job.id}/download" class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Download</a>' if job.status == 'success' else ''}
+                        {f'<a href="/api/backups/{job.id}/download?token={settings.SECRET_KEY}" class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Download</a>' if job.status == 'success' else ''}
                         <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--error);"
                                 hx-delete="/api/backups/{job.id}" hx-target="#job-{job.id}" hx-swap="outerHTML" hx-confirm="Delete this backup?">
                             Delete
@@ -142,4 +142,4 @@ async def delete_backup(job_id: str, db: AsyncSession = Depends(get_db)):
     # Delete record
     await db.delete(job)
     await db.commit()
-    return {"status": "deleted"}
+    return HTMLResponse(content="")

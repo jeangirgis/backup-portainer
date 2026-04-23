@@ -97,7 +97,10 @@ class BackupEngine:
         try:
             client = self.volume_exporter.client
             for vol in client.volumes.list():
-                if vol.name.startswith(f"{stack_name}_") or vol.name == stack_name:
+                # Check for common naming patterns in Docker Compose
+                if (vol.name.startswith(f"{stack_name}_") or 
+                    vol.name.startswith(f"{stack_name}-") or 
+                    vol.name == stack_name):
                     volumes.append(vol.name)
         except:
             pass

@@ -47,13 +47,20 @@ async def auth_middleware(request: Request, call_next):
     if request.url.path == "/health":
         return await call_next(request)
 
-    # Check Authorization header
+    # Check Authorization header or query parameter
     auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
+    token = None
+    
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+    else:
+        # Fallback to query parameter (useful for downloads)
+        token = request.query_params.get("token")
+
+    if not token:
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
     
     try:
-        token = auth_header.split(" ")[1]
         if token != settings.SECRET_KEY:
             return JSONResponse(status_code=401, content={"detail": "Invalid token"})
     except Exception:
