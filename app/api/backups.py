@@ -59,13 +59,15 @@ async def list_backups(request: Request, db: AsyncSession = Depends(get_db)):
                 <td>{size_mb}</td>
                 <td style="color: var(--text-muted);">{date_str}</td>
                 <td>
-                    <div style="display: flex; gap: 0.5rem;">
-                        {f'<a href="/api/backups/{job.id}/download?token={settings.SECRET_KEY}" class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Download</a>' if job.status == 'success' else ''}
-                        <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--error);"
-                                hx-delete="/api/backups/{job.id}" hx-target="#job-{job.id}" hx-swap="outerHTML" hx-confirm="Delete this backup?">
-                            Delete
-                        </button>
-                    </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            {f'<a href="/api/backups/{job.id}/download?token={settings.SECRET_KEY}" class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Download</a>' if job.status == 'success' else ''}
+                            {f'<button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" hx-post="/api/backups/{job.id}/restore" hx-indicator="#job-spinner-{job.id}" hx-confirm="This will overwrite current data. Proceed?">Restore</button>' if job.status == 'success' else ''}
+                            <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--error);"
+                                    hx-delete="/api/backups/{job.id}" hx-target="#job-{job.id}" hx-swap="outerHTML" hx-confirm="Delete this backup?">
+                                Delete
+                            </button>
+                            <div id="job-spinner-{job.id}" class="spinner htmx-indicator" style="width: 1rem; height: 1rem;"></div>
+                        </div>
                 </td>
             </tr>
             """
@@ -143,3 +145,19 @@ async def delete_backup(job_id: str, db: AsyncSession = Depends(get_db)):
     await db.delete(job)
     await db.commit()
     return HTMLResponse(content="")
+
+from app.engine.restore import RestoreEngine
+restore_engine = RestoreEngine()
+
+@router.post("/{job_id}/restore")
+async def restore_backup(job_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(BackupJob).where(BackupJob.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job or not job.storage_path:
+        raise HTTPException(status_code=404, detail="Backup not found")
+    
+    # Run restore in background
+    file_path = Path(settings.LOCAL_BACKUP_DIR) / job.storage_path
+    background_tasks.add_task(restore_engine.restore, file_path)
+    
+    return HTMLResponse(content='<span style="color: var(--success); font-size: 0.75rem;">Restore Started...</span>')
