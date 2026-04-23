@@ -3,8 +3,9 @@ version: '3.8'
 services:
   backup-companion:
     build: .
+    image: portainer-backup-companion:v1.0.5
     labels:
-      - "version=1.0.4"
+      - "version=1.0.5"
     container_name: portainer-backup-companion
     restart: unless-stopped
     ports:
@@ -12,9 +13,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - backup_data:/backups
-      # Mount source code directly so Git pulls update the app without rebuilding the image
-      - ./app:/app/app
-      - ./frontend:/app/frontend
     environment:
       - PORTAINER_URL=${PORTAINER_URL}
       - PORTAINER_API_TOKEN=${PORTAINER_API_TOKEN}
