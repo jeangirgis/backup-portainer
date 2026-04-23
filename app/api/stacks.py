@@ -56,7 +56,7 @@ async def list_stacks(request: Request):
                                     hx-post="/api/backups/{s.id}" 
                                     hx-target="#stack-actions-{s.id}"
                                     hx-indicator="#spinner-{s.id}">
-                                <div id="spinner-{s.id}" class="spinner htmx-indicator" style="width: 1rem; height: 1rem;"></div>
+                                <div id="spinner-{s.id}" class="spinner htmx-indicator"></div>
                                 Backup Now
                             </button>
                         </div>

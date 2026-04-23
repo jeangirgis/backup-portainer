@@ -34,9 +34,9 @@ async def start_backup(stack_id: str, background_tasks: BackgroundTasks, request
     
     if "hx-request" in request.headers:
         return HTMLResponse(content=f"""
-            <div hx-get="/api/backups/{job.id}/status" hx-trigger="load, every 2s" hx-swap="outerHTML">
+            <div hx-get="/api/backups/{job.id}/status" hx-trigger="load, every 2s" hx-swap="outerHTML" style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
                 <div class="status-badge status-pending">PENDING</div>
-                <div class="spinner" style="width: 1rem; height: 1rem; margin-top: 0.5rem;"></div>
+                <div class="spinner"></div>
             </div>
         """)
     return job
@@ -59,14 +59,14 @@ async def list_backups(request: Request, db: AsyncSession = Depends(get_db)):
                 <td>{size_mb}</td>
                 <td style="color: var(--text-muted);">{date_str}</td>
                 <td>
-                        <div style="display: flex; gap: 0.5rem;">
-                            {f'<a href="/api/backups/{job.id}/download?token={settings.SECRET_KEY}" class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Download</a>' if job.status == 'success' else ''}
-                            {f'<button class="btn btn-primary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" hx-post="/api/backups/{job.id}/restore" hx-indicator="#job-spinner-{job.id}" hx-confirm="This will overwrite current data. Proceed?">Restore</button>' if job.status == 'success' else ''}
-                            <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; color: var(--error);"
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            {f'<a href="/api/backups/{job.id}/download?token={settings.SECRET_KEY}" class="btn btn-outline">Download</a>' if job.status == 'success' else ''}
+                            {f'<button class="btn btn-primary" hx-post="/api/backups/{job.id}/restore" hx-indicator="#job-spinner-{job.id}" hx-confirm="This will overwrite current data. Proceed?">Restore</button>' if job.status == 'success' else ''}
+                            <button class="btn btn-outline" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3);"
                                     hx-delete="/api/backups/{job.id}" hx-target="#job-{job.id}" hx-swap="outerHTML" hx-confirm="Delete this backup?">
                                 Delete
                             </button>
-                            <div id="job-spinner-{job.id}" class="spinner htmx-indicator" style="width: 1rem; height: 1rem;"></div>
+                            <div id="job-spinner-{job.id}" class="spinner htmx-indicator"></div>
                         </div>
                 </td>
             </tr>
@@ -87,9 +87,9 @@ async def get_backup_status(job_id: str, request: Request, db: AsyncSession = De
     if "hx-request" in request.headers:
         if job.status in ["pending", "running"]:
             return HTMLResponse(content=f"""
-                <div hx-get="/api/backups/{job.id}/status" hx-trigger="every 2s" hx-swap="outerHTML">
+                <div hx-get="/api/backups/{job.id}/status" hx-trigger="every 2s" hx-swap="outerHTML" style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
                     <span class="status-badge status-{job.status}">{job.status.upper()}</span>
-                    <div class="spinner" style="width: 1rem; height: 1rem; margin-top: 0.5rem;"></div>
+                    <div class="spinner"></div>
                 </div>
             """)
         elif job.status == "success":
