@@ -1,11 +1,11 @@
 version: '3.8'
 
 services:
-  backup-companion:
+  # Renamed service to force Docker Compose to build a new local image
+  backup-companion-v2:
     build: .
-    image: portainer-backup-companion:v1.0.5
     labels:
-      - "version=1.0.5"
+      - "version=1.0.6"
     container_name: portainer-backup-companion
     restart: unless-stopped
     ports:
