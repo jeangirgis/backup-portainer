@@ -103,81 +103,85 @@ class BackupEngine:
         volumes = []
         client = self.volume_exporter.client
 
-        # Docker Compose normalizes project names to lowercase
-        normalized = stack_name.lower().replace(" ", "").replace("-", "")
-        logger.info(f"--- Volume detection for stack='{stack_name}', normalized='{normalized}' ---")
+        # Docker Compose v2 normalizes project names to lowercase but KEEPS hyphens
+        # Try multiple possible normalizations
+        name_variants = list(dict.fromkeys([
+            stack_name.lower(),                          # "my-stack" -> "my-stack"
+            stack_name,                                   # original casing
+            stack_name.lower().replace(" ", ""),          # strip spaces only
+            stack_name.lower().replace(" ", "-"),         # spaces to hyphens
+            stack_name.lower().replace("-", ""),          # strip hyphens (old Docker Compose v1)
+            stack_name.lower().replace("_", ""),          # strip underscores
+        ]))
+        logger.info(f"--- Volume detection for stack='{stack_name}' ---")
+        logger.info(f"  Name variants to try: {name_variants}")
 
-        # Strategy 1: Inspect running containers by label
-        try:
-            for label_name in [normalized, stack_name, stack_name.lower()]:
+        # Strategy 1: Inspect running containers by label (most reliable)
+        for label_name in name_variants:
+            try:
                 containers = client.containers.list(
                     all=True,
                     filters={"label": f"com.docker.compose.project={label_name}"},
                 )
                 if containers:
-                    logger.info(f"  Strategy 1: Found {len(containers)} containers with label project={label_name}")
+                    logger.info(f"  FOUND {len(containers)} containers with project={label_name}")
                     for c in containers:
-                        cname = c.name
                         for mount in c.attrs.get("Mounts", []):
                             if mount.get("Type") == "volume" and "Name" in mount:
                                 vol = mount["Name"]
-                                logger.info(f"    Container '{cname}' -> volume '{vol}'")
+                                logger.info(f"    Container '{c.name}' -> volume '{vol}'")
                                 volumes.append(vol)
-                    break  # Found containers, stop trying other label names
-                else:
-                    logger.info(f"  Strategy 1: No containers found with label project={label_name}")
-        except Exception as e:
-            logger.error(f"  Strategy 1 failed: {e}")
+                    break
+            except Exception as e:
+                logger.error(f"  Strategy 1 error with '{label_name}': {e}")
 
         volumes = list(set(volumes))
 
         # Strategy 2: Volume labels
         if not volumes:
-            try:
-                for label_name in [normalized, stack_name, stack_name.lower()]:
+            for label_name in name_variants:
+                try:
                     labeled_vols = client.volumes.list(
                         filters={"label": f"com.docker.compose.project={label_name}"}
                     )
                     if labeled_vols:
                         for v in labeled_vols:
-                            logger.info(f"  Strategy 2: Found labeled volume '{v.name}' (project={label_name})")
+                            logger.info(f"  Label match: volume '{v.name}' (project={label_name})")
                             volumes.append(v.name)
                         break
-            except Exception as e:
-                logger.error(f"  Strategy 2 failed: {e}")
+                except Exception as e:
+                    logger.error(f"  Strategy 2 error with '{label_name}': {e}")
 
         # Strategy 3: Name prefix matching
         if not volumes:
             try:
                 all_vols = client.volumes.list()
-                logger.info(f"  Strategy 3: Scanning all {len(all_vols)} volumes by name prefix...")
+                logger.info(f"  Strategy 3: scanning {len(all_vols)} volumes by name prefix...")
                 for v in all_vols:
-                    name_lower = v.name.lower()
-                    if (
-                        name_lower.startswith(f"{normalized}_")
-                        or name_lower.startswith(f"{normalized}-")
-                        or name_lower.startswith(f"{stack_name.lower()}_")
-                        or name_lower.startswith(f"{stack_name.lower()}-")
-                    ):
-                        logger.info(f"    Strategy 3 match: '{v.name}'")
-                        volumes.append(v.name)
-                    else:
-                        logger.debug(f"    No match: '{v.name}'")
+                    for variant in name_variants:
+                        if (
+                            v.name.lower().startswith(f"{variant}_")
+                            or v.name.lower().startswith(f"{variant}-")
+                        ):
+                            logger.info(f"    Name prefix match: '{v.name}' (variant={variant})")
+                            volumes.append(v.name)
+                            break
             except Exception as e:
-                logger.error(f"  Strategy 3 failed: {e}")
+                logger.error(f"  Strategy 3 error: {e}")
 
-        # Strategy 4: If STILL nothing, list ALL volumes for debugging
+        # Strategy 4: Dump all volumes for debugging if nothing found
         if not volumes:
             try:
                 all_vols = client.volumes.list()
-                logger.warning(f"  NO VOLUMES FOUND for stack '{stack_name}'. Listing all {len(all_vols)} volumes:")
+                logger.warning(f"  *** NO VOLUMES FOUND for '{stack_name}' ***")
+                logger.warning(f"  All {len(all_vols)} volumes in Docker:")
                 for v in all_vols:
                     labels = v.attrs.get("Labels", {}) or {}
-                    project = labels.get("com.docker.compose.project", "none")
-                    logger.warning(f"    Volume: '{v.name}' — project_label='{project}'")
-            except Exception as e:
-                logger.error(f"  Could not list volumes: {e}")
+                    project = labels.get("com.docker.compose.project", "—")
+                    logger.warning(f"    '{v.name}' project_label='{project}'")
+            except Exception:
+                pass
 
         result = list(set(volumes))
-        logger.info(f"--- Volume detection result: {len(result)} volumes: {result} ---")
+        logger.info(f"--- Result: {len(result)} volumes: {result} ---")
         return result

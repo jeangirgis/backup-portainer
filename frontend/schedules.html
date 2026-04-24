@@ -21,7 +21,7 @@
         </header>
 
         <main>
-            <div style="display: grid; grid-template-columns: 1fr 380px; gap: 2rem; align-items: start;">
+            <div style="display: grid; grid-template-columns: 1fr 400px; gap: 2rem; align-items: start;">
                 <!-- Schedule List -->
                 <div>
                     <div class="section-header">
@@ -32,7 +32,7 @@
                             <thead>
                                 <tr>
                                     <th>Stack</th>
-                                    <th>Cron</th>
+                                    <th>Frequency</th>
                                     <th>Retention</th>
                                     <th>Status</th>
                                     <th>Actions</th>
@@ -47,33 +47,117 @@
 
                 <!-- New Schedule Form -->
                 <div class="card">
-                    <h3 style="margin-bottom: 1.5rem;">New Schedule</h3>
-                    <form hx-post="/api/schedules" hx-target="#schedule-list" hx-swap="beforeend" hx-ext="json-enc" hx-on::after-request="this.reset()">
+                    <h3 style="margin-bottom: 1.5rem;">➕ New Schedule</h3>
+                    <form id="schedule-form" hx-post="/api/schedules" hx-target="#schedule-list" hx-swap="beforeend" hx-ext="json-enc" hx-on::after-request="this.reset(); document.getElementById('custom-cron-group').style.display='none';">
+
+                        <!-- Stack Selection -->
                         <div class="form-group">
                             <label class="form-label">Stack ID</label>
                             <input type="text" name="stack_id" required class="form-input" placeholder="e.g. 5">
+                            <p class="form-hint">Find the Stack ID on the Dashboard page</p>
                         </div>
+
                         <div class="form-group">
-                            <label class="form-label">Stack Name (Label)</label>
+                            <label class="form-label">Stack Name</label>
                             <input type="text" name="stack_name" required class="form-input" placeholder="e.g. Mattermost">
+                            <p class="form-hint">A label to identify this backup</p>
                         </div>
+
+                        <!-- Frequency Selection - User Friendly! -->
                         <div class="form-group">
+                            <label class="form-label">Backup Frequency</label>
+                            <div class="frequency-grid" id="freq-grid">
+                                <button type="button" class="freq-btn active" data-cron="0 2 * * *" onclick="selectFreq(this)">
+                                    <span class="freq-icon">🌙</span>
+                                    <span class="freq-title">Daily</span>
+                                    <span class="freq-desc">Every night at 2 AM</span>
+                                </button>
+                                <button type="button" class="freq-btn" data-cron="0 2 * * 0" onclick="selectFreq(this)">
+                                    <span class="freq-icon">📅</span>
+                                    <span class="freq-title">Weekly</span>
+                                    <span class="freq-desc">Every Sunday at 2 AM</span>
+                                </button>
+                                <button type="button" class="freq-btn" data-cron="0 */6 * * *" onclick="selectFreq(this)">
+                                    <span class="freq-icon">⚡</span>
+                                    <span class="freq-title">Every 6 Hours</span>
+                                    <span class="freq-desc">4 times per day</span>
+                                </button>
+                                <button type="button" class="freq-btn" data-cron="0 */12 * * *" onclick="selectFreq(this)">
+                                    <span class="freq-icon">🔄</span>
+                                    <span class="freq-title">Twice Daily</span>
+                                    <span class="freq-desc">Every 12 hours</span>
+                                </button>
+                                <button type="button" class="freq-btn" data-cron="0 2 1 * *" onclick="selectFreq(this)">
+                                    <span class="freq-icon">📆</span>
+                                    <span class="freq-title">Monthly</span>
+                                    <span class="freq-desc">1st of each month</span>
+                                </button>
+                                <button type="button" class="freq-btn" data-cron="custom" onclick="selectFreq(this)">
+                                    <span class="freq-icon">🔧</span>
+                                    <span class="freq-title">Custom</span>
+                                    <span class="freq-desc">Enter cron expression</span>
+                                </button>
+                            </div>
+                            <!-- Hidden cron input that gets submitted -->
+                            <input type="hidden" name="cron_expression" id="cron-input" value="0 2 * * *">
+                        </div>
+
+                        <!-- Custom Cron (shown only when Custom is selected) -->
+                        <div class="form-group" id="custom-cron-group" style="display: none;">
                             <label class="form-label">Cron Expression</label>
-                            <input type="text" name="cron_expression" placeholder="0 2 * * *" required class="form-input">
-                            <p class="form-hint">Format: Min Hour Day Month Weekday — e.g. <code>0 2 * * *</code> = daily at 2 AM</p>
+                            <input type="text" id="custom-cron-input" class="form-input" placeholder="0 2 * * *"
+                                   oninput="document.getElementById('cron-input').value = this.value">
+                            <p class="form-hint">Format: Minute Hour Day Month Weekday</p>
                         </div>
+
+                        <!-- Retention -->
                         <div class="form-group">
-                            <label class="form-label">Retention (Days)</label>
-                            <input type="number" name="retention_days" value="7" class="form-input">
-                            <p class="form-hint">Backups older than this are auto-deleted. Set to 0 to keep forever.</p>
+                            <label class="form-label">Keep Backups For</label>
+                            <div class="retention-grid">
+                                <button type="button" class="ret-btn" data-days="3" onclick="selectRetention(this)">3 days</button>
+                                <button type="button" class="ret-btn active" data-days="7" onclick="selectRetention(this)">7 days</button>
+                                <button type="button" class="ret-btn" data-days="14" onclick="selectRetention(this)">14 days</button>
+                                <button type="button" class="ret-btn" data-days="30" onclick="selectRetention(this)">30 days</button>
+                                <button type="button" class="ret-btn" data-days="90" onclick="selectRetention(this)">90 days</button>
+                                <button type="button" class="ret-btn" data-days="0" onclick="selectRetention(this)">Forever</button>
+                            </div>
+                            <input type="hidden" name="retention_days" id="retention-input" value="7">
                         </div>
-                        <button type="submit" class="btn btn-primary" style="width: 100%;">Create Schedule</button>
+
+                        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+                            Create Schedule
+                        </button>
                     </form>
                 </div>
             </div>
         </main>
     </div>
+
     <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
     <script src="app.js"></script>
+    <script>
+        function selectFreq(btn) {
+            // Remove active from all
+            document.querySelectorAll('.freq-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            const cron = btn.dataset.cron;
+            const customGroup = document.getElementById('custom-cron-group');
+
+            if (cron === 'custom') {
+                customGroup.style.display = 'block';
+                document.getElementById('custom-cron-input').focus();
+            } else {
+                customGroup.style.display = 'none';
+                document.getElementById('cron-input').value = cron;
+            }
+        }
+
+        function selectRetention(btn) {
+            document.querySelectorAll('.ret-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('retention-input').value = btn.dataset.days;
+        }
+    </script>
 </body>
 </html>

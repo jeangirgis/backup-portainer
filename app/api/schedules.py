@@ -11,6 +11,26 @@ from app.scheduler import scheduler as live_scheduler
 
 router = APIRouter(prefix="/schedules", tags=["schedules"])
 
+# Human-readable cron descriptions
+CRON_LABELS = {
+    "0 2 * * *": "🌙 Daily at 2 AM",
+    "0 2 * * 0": "📅 Weekly (Sun 2 AM)",
+    "0 */6 * * *": "⚡ Every 6 hours",
+    "0 */12 * * *": "🔄 Twice daily",
+    "0 2 1 * *": "📆 Monthly (1st)",
+    "0 3 * * *": "🌙 Daily at 3 AM",
+    "0 0 * * *": "🌙 Daily at midnight",
+    "0 */1 * * *": "⚡ Every hour",
+}
+
+
+def cron_to_human(cron: str) -> str:
+    """Convert a cron expression to a human-readable label."""
+    if cron in CRON_LABELS:
+        return CRON_LABELS[cron]
+    return f"🔧 {cron}"
+
+
 class ScheduleSchema(BaseModel):
     id: str
     stack_id: str
@@ -21,11 +41,13 @@ class ScheduleSchema(BaseModel):
     last_run_at: Optional[datetime]
     created_at: datetime
 
+
 class ScheduleCreate(BaseModel):
     stack_id: str
     stack_name: str
     cron_expression: str
     retention_days: int = 7
+
 
 @router.get("", response_model=List[ScheduleSchema])
 async def list_schedules(request: Request, db: AsyncSession = Depends(get_db)):
@@ -34,17 +56,30 @@ async def list_schedules(request: Request, db: AsyncSession = Depends(get_db)):
     
     if "hx-request" in request.headers:
         html = ""
+        if not schedules:
+            html = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">No schedules yet. Create one on the right →</td></tr>'
+            return HTMLResponse(content=html)
+
         for s in schedules:
-            status_color = "var(--success)" if s.enabled else "var(--text-muted)"
+            freq_label = cron_to_human(s.cron_expression)
+            retention_label = f"{s.retention_days} days" if s.retention_days > 0 else "Forever"
+            status_class = "status-running" if s.enabled else "status-stopped"
+            status_text = "Active" if s.enabled else "Paused"
+            last_run = s.last_run_at.strftime("%Y-%m-%d %H:%M") if s.last_run_at else "Never"
+
             html += f"""
             <tr id="schedule-{s.id}">
-                <td><strong>{s.stack_name}</strong></td>
-                <td><code>{s.cron_expression}</code></td>
-                <td>{s.retention_days} days</td>
-                <td><span style="color: {status_color}; font-weight: bold;">{'Enabled' if s.enabled else 'Disabled'}</span></td>
                 <td>
-                    <button class="btn btn-outline" style="color: var(--error); padding: 0.25rem 0.5rem;"
-                            hx-delete="/api/schedules/{s.id}" hx-target="#schedule-{s.id}" hx-swap="outerHTML">
+                    <strong>{s.stack_name}</strong>
+                    <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.15rem;">Last run: {last_run}</div>
+                </td>
+                <td>{freq_label}</td>
+                <td>{retention_label}</td>
+                <td><span class="status-badge {status_class}">{status_text}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-danger"
+                            hx-delete="/api/schedules/{s.id}" hx-target="#schedule-{s.id}" hx-swap="outerHTML"
+                            hx-confirm="Delete this schedule?">
                         Delete
                     </button>
                 </td>
@@ -54,13 +89,19 @@ async def list_schedules(request: Request, db: AsyncSession = Depends(get_db)):
     
     return schedules
 
+
 @router.post("", response_model=ScheduleSchema)
-async def create_schedule(data: ScheduleCreate, db: AsyncSession = Depends(get_db)):
+async def create_schedule(data: ScheduleCreate, request: Request, db: AsyncSession = Depends(get_db)):
     # Validate cron
     try:
         from apscheduler.triggers.cron import CronTrigger
         CronTrigger.from_crontab(data.cron_expression)
-    except:
+    except Exception:
+        if "hx-request" in request.headers:
+            return HTMLResponse(
+                content=f'<tr><td colspan="5"><div class="toast toast-error">❌ Invalid cron expression: {data.cron_expression}</div></td></tr>',
+                status_code=200,
+            )
         raise HTTPException(status_code=400, detail="Invalid cron expression")
 
     sch = Schedule(**data.model_dump())
@@ -69,7 +110,32 @@ async def create_schedule(data: ScheduleCreate, db: AsyncSession = Depends(get_d
     await db.refresh(sch)
     
     live_scheduler.add_job(sch)
+
+    # Return HTML row for HTMX
+    if "hx-request" in request.headers:
+        freq_label = cron_to_human(sch.cron_expression)
+        retention_label = f"{sch.retention_days} days" if sch.retention_days > 0 else "Forever"
+        return HTMLResponse(content=f"""
+            <tr id="schedule-{sch.id}">
+                <td>
+                    <strong>{sch.stack_name}</strong>
+                    <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.15rem;">Last run: Never</div>
+                </td>
+                <td>{freq_label}</td>
+                <td>{retention_label}</td>
+                <td><span class="status-badge status-running">Active</span></td>
+                <td>
+                    <button class="btn btn-sm btn-danger"
+                            hx-delete="/api/schedules/{sch.id}" hx-target="#schedule-{sch.id}" hx-swap="outerHTML"
+                            hx-confirm="Delete this schedule?">
+                        Delete
+                    </button>
+                </td>
+            </tr>
+        """)
+
     return sch
+
 
 @router.delete("/{schedule_id}")
 async def delete_schedule(schedule_id: str, db: AsyncSession = Depends(get_db)):
