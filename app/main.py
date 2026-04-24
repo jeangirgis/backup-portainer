@@ -6,6 +6,19 @@ from app.db import init_db
 from app.api.stacks import router as stacks_router
 from app.api.backups import router as backups_router
 from app.config import get_settings
+import logging
+
+# Configure logging to show our debug messages
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+# Quiet down noisy libraries
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
+logging.getLogger("uvicorn.access").setLevel(logging.INFO)
 
 settings = get_settings()
 
@@ -43,8 +56,8 @@ async def auth_middleware(request: Request, call_next):
     if request.url.path == "/favicon.ico":
         return await call_next(request)
 
-    # Allow health check
-    if request.url.path == "/health" or request.url.path == "/api/health":
+    # Allow health check and debug
+    if request.url.path in ["/health", "/api/health", "/api/debug/docker"]:
         return await call_next(request)
 
     # Check Authorization header or query parameter
@@ -79,5 +92,48 @@ app.include_router(schedules_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(health_router, prefix="/api")
 
+
+# Debug endpoint — shows ALL Docker containers and volumes (no auth required)
+@app.get("/api/debug/docker")
+async def debug_docker():
+    import docker
+    client = docker.from_env()
+    
+    containers = []
+    for c in client.containers.list(all=True):
+        labels = c.labels or {}
+        mounts = []
+        for m in c.attrs.get("Mounts", []):
+            mounts.append({
+                "type": m.get("Type"),
+                "name": m.get("Name", m.get("Source", "?")),
+                "dest": m.get("Destination"),
+            })
+        containers.append({
+            "name": c.name,
+            "status": c.status,
+            "project": labels.get("com.docker.compose.project", "none"),
+            "service": labels.get("com.docker.compose.service", "none"),
+            "mounts": mounts,
+        })
+    
+    volumes = []
+    for v in client.volumes.list():
+        labels = v.attrs.get("Labels", {}) or {}
+        volumes.append({
+            "name": v.name,
+            "project": labels.get("com.docker.compose.project", "none"),
+            "driver": v.attrs.get("Driver", "?"),
+        })
+    
+    return {
+        "containers": containers,
+        "volumes": volumes,
+        "total_containers": len(containers),
+        "total_volumes": len(volumes),
+    }
+
+
 # Static Files
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+

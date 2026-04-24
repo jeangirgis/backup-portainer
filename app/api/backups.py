@@ -181,7 +181,80 @@ async def delete_backup(job_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{job_id}/restore")
-async def restore_backup(job_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+async def restore_backup(job_id: str, db: AsyncSession = Depends(get_db)):
+    """Run restore synchronously and return immediate results."""
+    result = await db.execute(select(BackupJob).where(BackupJob.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job or not job.storage_path:
+        return HTMLResponse(content="""
+            <div class="toast toast-error"><span>❌</span> Backup record not found.</div>
+        """)
+    
+    file_path = Path(settings.LOCAL_BACKUP_DIR) / job.storage_path
+    if not file_path.exists():
+        return HTMLResponse(content=f"""
+            <div class="toast toast-error">
+                <span>❌</span> Backup file not found: <code>{job.storage_path}</code>
+            </div>
+        """)
+
+    # Run restore synchronously (it uses Docker SDK which is sync)
+    import asyncio
+    loop = asyncio.get_event_loop()
+    try:
+        restore_result = await loop.run_in_executor(None, restore_engine.restore, file_path)
+    except Exception as e:
+        return HTMLResponse(content=f"""
+            <div class="toast toast-error">
+                <span>❌</span> Restore crashed: {str(e)[:200]}
+            </div>
+        """)
+
+    # Build result HTML
+    status = restore_result.get("status", "failed")
+    stack = restore_result.get("stack_name", "unknown")
+    restored = restore_result.get("volumes_restored", 0)
+    found = restore_result.get("volumes_found", 0)
+    error = restore_result.get("error")
+    details = restore_result.get("details", [])
+
+    if status == "success":
+        details_html = "".join(f"<li>{d}</li>" for d in details)
+        return HTMLResponse(content=f"""
+            <div class="toast toast-success">
+                <div>
+                    <strong>✅ Restore Complete — {stack}</strong><br>
+                    <span style="font-size: 0.8rem;">{restored}/{found} volumes restored</span>
+                    <ul style="margin-top: 0.5rem; font-size: 0.75rem; list-style: none; padding: 0;">{details_html}</ul>
+                </div>
+            </div>
+        """)
+    elif status == "partial" or status == "empty":
+        details_html = "".join(f"<li>{d}</li>" for d in details)
+        return HTMLResponse(content=f"""
+            <div class="toast toast-info">
+                <div>
+                    <strong>⚠️ Partial Restore — {stack}</strong><br>
+                    <span style="font-size: 0.8rem;">{restored}/{found} volumes restored</span>
+                    {f'<br><span style="font-size: 0.75rem; color: var(--warning);">{error}</span>' if error else ''}
+                    <ul style="margin-top: 0.5rem; font-size: 0.75rem; list-style: none; padding: 0;">{details_html}</ul>
+                </div>
+            </div>
+        """)
+    else:
+        return HTMLResponse(content=f"""
+            <div class="toast toast-error">
+                <div>
+                    <strong>❌ Restore Failed — {stack}</strong><br>
+                    <span style="font-size: 0.8rem;">{error or 'Unknown error'}</span>
+                </div>
+            </div>
+        """)
+
+
+@router.get("/{job_id}/inspect")
+async def inspect_backup_endpoint(job_id: str, db: AsyncSession = Depends(get_db)):
+    """Inspect what's inside a backup without restoring it."""
     result = await db.execute(select(BackupJob).where(BackupJob.id == job_id))
     job = result.scalar_one_or_none()
     if not job or not job.storage_path:
@@ -189,27 +262,11 @@ async def restore_backup(job_id: str, background_tasks: BackgroundTasks, db: Asy
     
     file_path = Path(settings.LOCAL_BACKUP_DIR) / job.storage_path
     if not file_path.exists():
-        return HTMLResponse(content="""
-            <div class="toast toast-error">
-                <span>❌</span> Backup file not found on disk.
-            </div>
-        """)
-
-    # Run restore synchronously in background thread
-    # (RestoreEngine.restore is intentionally sync)
-    background_tasks.add_task(_run_restore, file_path, job.stack_name)
+        raise HTTPException(status_code=404, detail="File not found on disk")
     
-    return HTMLResponse(content=f"""
-        <div class="toast toast-info">
-            <span>🔄</span> Restore started for <strong>{job.stack_name}</strong>. Check container logs for progress.
-        </div>
-    """)
+    from app.engine.restore import inspect_backup
+    import asyncio
+    loop = asyncio.get_event_loop()
+    info = await loop.run_in_executor(None, inspect_backup, file_path)
+    return info
 
-
-def _run_restore(file_path: Path, stack_name: str):
-    """Wrapper to run restore and log results."""
-    try:
-        result = restore_engine.restore(file_path)
-        logger.info(f"Restore completed for {stack_name}: {result}")
-    except Exception as e:
-        logger.error(f"Restore failed for {stack_name}: {e}", exc_info=True)

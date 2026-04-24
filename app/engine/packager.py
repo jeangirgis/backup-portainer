@@ -2,11 +2,15 @@ import tarfile
 import json
 import hashlib
 import os
+import logging
 from datetime import datetime
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
+
 class Packager:
-    def __init__(self, app_version: str = "1.0.0"):
+    def __init__(self, app_version: str = "2.0.0"):
         self.app_version = app_version
 
     def _calculate_sha256(self, file_path: Path) -> str:
@@ -24,7 +28,7 @@ class Packager:
 
         # 1. Generate manifest.json
         manifest = {
-            "version": "1.0",
+            "version": "2.0",
             "app_version": self.app_version,
             "created_at": datetime.utcnow().isoformat() + "Z",
             "stack": {
@@ -32,7 +36,7 @@ class Packager:
                 "name": stack_name,
             },
             "volumes": volumes,
-            "checksums": {}
+            "checksums": {},
         }
 
         # Calculate checksums for everything in stack/ and volumes/
@@ -45,8 +49,12 @@ class Packager:
         with open(temp_dir / "manifest.json", "w", encoding="utf-8") as f:
             json.dump(manifest, f, indent=2)
 
+        logger.info(f"Manifest: stack={stack_name}, volumes={volumes}, files={list(manifest['checksums'].keys())}")
+
         # 2. Create .tar.gz
         with tarfile.open(bundle_path, "w:gz") as tar:
             tar.add(temp_dir, arcname=".")
 
+        logger.info(f"Bundle: {bundle_name} ({bundle_path.stat().st_size} bytes)")
         return bundle_path
+
