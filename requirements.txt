@@ -12,3 +12,6 @@ pydantic-settings==2.2.1
 python-multipart==0.0.9
 aiofiles==23.2.1
 aiosmtplib==3.0.1
+google-api-python-client==2.126.0
+google-auth-httplib2==0.2.0
+google-auth-oauthlib==1.2.0

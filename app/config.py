@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     SFTP_KEY_PATH: Optional[str] = None
     SFTP_REMOTE_DIR: str = "/backups"
 
+    # Google Drive Storage
+    GDRIVE_CREDENTIALS_FILE: str = "/app/credentials.json"
+    GDRIVE_FOLDER_ID: Optional[str] = None
+
     # Notifications
     NOTIFY_SLACK_WEBHOOK: Optional[str] = None
     NOTIFY_EMAIL_TO: Optional[str] = None
@@ -46,6 +50,7 @@ class Settings(BaseSettings):
         from app.storage.local import LocalDriver
         from app.storage.s3 import S3Driver
         from app.storage.sftp import SFTPDriver
+        from app.storage.gdrive import GoogleDriveDriver
 
         if self.STORAGE_BACKEND == "local":
             return LocalDriver(Path(self.LOCAL_BACKUP_DIR))
@@ -66,6 +71,13 @@ class Settings(BaseSettings):
                 password=self.SFTP_PASSWORD,
                 key_path=self.SFTP_KEY_PATH,
                 remote_dir=self.SFTP_REMOTE_DIR
+            )
+        elif self.STORAGE_BACKEND == "gdrive":
+            if not self.GDRIVE_FOLDER_ID:
+                raise ValueError("GDRIVE_FOLDER_ID must be set when using gdrive storage backend")
+            return GoogleDriveDriver(
+                credentials_file=Path(self.GDRIVE_CREDENTIALS_FILE),
+                folder_id=self.GDRIVE_FOLDER_ID
             )
         else:
             raise ValueError(f"Unknown storage backend: {self.STORAGE_BACKEND}")

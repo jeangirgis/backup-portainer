@@ -49,6 +49,23 @@
                 <div id="test-result" style="margin-top: 1rem;"></div>
             </div>
 
+            <!-- Google Drive Setup Instructions -->
+            <div class="card" style="margin-bottom: 2rem;">
+                <h3 style="margin-bottom: 1rem;">☁️ Google Drive Setup</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+                    If you want to use Google Drive as your storage backend (<code>STORAGE_BACKEND=gdrive</code>), you must set up a Google Service Account.
+                </p>
+                <ol style="font-size: 0.85rem; color: var(--text-muted); padding-left: 1.5rem; line-height: 1.6;">
+                    <li>Go to the <a href="https://console.cloud.google.com/" target="_blank" style="color: var(--primary);">Google Cloud Console</a>.</li>
+                    <li>Create a Project and enable the <strong>Google Drive API</strong>.</li>
+                    <li>Navigate to <strong>IAM & Admin > Service Accounts</strong> and create a new Service Account.</li>
+                    <li>Create a <strong>JSON Key</strong> for that Service Account and save it as <code>credentials.json</code>.</li>
+                    <li>Create a folder in your personal Google Drive and <strong>Share</strong> it with the Service Account's email address (give it Editor access).</li>
+                    <li>Extract the Folder ID from the URL (the long string of characters after <code>folders/</code>).</li>
+                    <li>Mount the <code>credentials.json</code> file into your docker container and set <code>GDRIVE_FOLDER_ID</code> in your <code>.env</code> file.</li>
+                </ol>
+            </div>
+
             <!-- System Health -->
             <div class="card">
                 <h3 style="margin-bottom: 1.5rem;">📊 System Health</h3>

@@ -5,7 +5,7 @@ services:
   backup-companion-v2:
     build: .
     labels:
-      - "version=2.3.0"
+      - "version=2.4.0"
     container_name: portainer-backup-companion
     restart: unless-stopped
     ports:
@@ -13,6 +13,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - backup_data:/backups
+      # For Google Drive:
+      # - ./credentials.json:/app/credentials.json:ro
     environment:
       - PORTAINER_URL=${PORTAINER_URL}
       - PORTAINER_API_TOKEN=${PORTAINER_API_TOKEN}
@@ -20,9 +22,10 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
       - LOCAL_BACKUP_DIR=/backups
+      # Google Drive Config:
+      # - GDRIVE_FOLDER_ID=${GDRIVE_FOLDER_ID}
+      # - GDRIVE_CREDENTIALS_FILE=/app/credentials.json
       # Optional: S3 / SFTP configs can be added here as well if needed
-      # - S3_BUCKET=${S3_BUCKET}
-      # ...
 
 volumes:
   backup_data:

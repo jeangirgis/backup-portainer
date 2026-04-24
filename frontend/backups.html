@@ -23,9 +23,18 @@
         <main>
             <div class="section-header">
                 <h2>Backup History</h2>
-                <button class="btn btn-outline" hx-get="/api/backups" hx-target="#backup-list" hx-swap="innerHTML">
-                    Refresh
-                </button>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <form id="upload-form" hx-post="/api/backups/upload" hx-encoding="multipart/form-data" hx-target="#restore-toast" hx-swap="innerHTML" style="display: inline;">
+                        <input type="file" id="backup-file-input" name="file" accept=".tar.gz" style="display: none;" onchange="if(this.files.length > 0) document.getElementById('upload-submit').click();">
+                        <button type="button" class="btn btn-primary" onclick="document.getElementById('backup-file-input').click();">
+                            Upload Backup
+                        </button>
+                        <button type="submit" id="upload-submit" style="display: none;"></button>
+                    </form>
+                    <button class="btn btn-outline" hx-get="/api/backups" hx-target="#backup-list" hx-swap="innerHTML">
+                        Refresh
+                    </button>
+                </div>
             </div>
 
             <!-- Restore feedback toast area -->
