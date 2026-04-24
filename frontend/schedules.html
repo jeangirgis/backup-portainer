@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Schedules | Portainer Backup Companion</title>
+    <meta name="description" content="Automated backup schedule management for Portainer stacks">
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 </head>
@@ -20,43 +21,51 @@
         </header>
 
         <main>
-            <div style="display: grid; grid-template-columns: 1fr 350px; gap: 2rem; align-items: start;">
-                <div class="card" style="padding: 0; overflow: hidden;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Stack</th>
-                                <th>Cron</th>
-                                <th>Retention</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="schedule-list" hx-get="/api/schedules" hx-trigger="load">
-                            <tr><td colspan="5" style="text-align: center; padding: 2rem;">Loading schedules...</td></tr>
-                        </tbody>
-                    </table>
+            <div style="display: grid; grid-template-columns: 1fr 380px; gap: 2rem; align-items: start;">
+                <!-- Schedule List -->
+                <div>
+                    <div class="section-header">
+                        <h2>Active Schedules</h2>
+                    </div>
+                    <div class="card" style="padding: 0; overflow: hidden;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Stack</th>
+                                    <th>Cron</th>
+                                    <th>Retention</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="schedule-list" hx-get="/api/schedules" hx-trigger="load">
+                                <tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">Loading schedules...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
+                <!-- New Schedule Form -->
                 <div class="card">
                     <h3 style="margin-bottom: 1.5rem;">New Schedule</h3>
                     <form hx-post="/api/schedules" hx-target="#schedule-list" hx-swap="beforeend" hx-ext="json-enc" hx-on::after-request="this.reset()">
-                        <div style="margin-bottom: 1rem;">
-                            <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">Stack ID</label>
-                            <input type="text" name="stack_id" required style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.5rem; color: white;">
+                        <div class="form-group">
+                            <label class="form-label">Stack ID</label>
+                            <input type="text" name="stack_id" required class="form-input" placeholder="e.g. 5">
                         </div>
-                        <div style="margin-bottom: 1rem;">
-                            <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">Stack Name (Label)</label>
-                            <input type="text" name="stack_name" required style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.5rem; color: white;">
+                        <div class="form-group">
+                            <label class="form-label">Stack Name (Label)</label>
+                            <input type="text" name="stack_name" required class="form-input" placeholder="e.g. Mattermost">
                         </div>
-                        <div style="margin-bottom: 1rem;">
-                            <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">Cron Expression</label>
-                            <input type="text" name="cron_expression" placeholder="0 2 * * *" required style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.5rem; color: white;">
-                            <p style="font-size: 0.625rem; color: var(--text-muted); margin-top: 0.25rem;">Min Hour Day Month Week</p>
+                        <div class="form-group">
+                            <label class="form-label">Cron Expression</label>
+                            <input type="text" name="cron_expression" placeholder="0 2 * * *" required class="form-input">
+                            <p class="form-hint">Format: Min Hour Day Month Weekday — e.g. <code>0 2 * * *</code> = daily at 2 AM</p>
                         </div>
-                        <div style="margin-bottom: 1.5rem;">
-                            <label style="display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">Retention (Days)</label>
-                            <input type="number" name="retention_days" value="7" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.5rem; color: white;">
+                        <div class="form-group">
+                            <label class="form-label">Retention (Days)</label>
+                            <input type="number" name="retention_days" value="7" class="form-input">
+                            <p class="form-hint">Backups older than this are auto-deleted. Set to 0 to keep forever.</p>
                         </div>
                         <button type="submit" class="btn btn-primary" style="width: 100%;">Create Schedule</button>
                     </form>

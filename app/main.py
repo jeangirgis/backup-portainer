@@ -43,8 +43,8 @@ async def auth_middleware(request: Request, call_next):
     if request.url.path == "/favicon.ico":
         return await call_next(request)
 
-    # Allow health check if we add one
-    if request.url.path == "/health":
+    # Allow health check
+    if request.url.path == "/health" or request.url.path == "/api/health":
         return await call_next(request)
 
     # Check Authorization header or query parameter
@@ -70,12 +70,14 @@ async def auth_middleware(request: Request, call_next):
 
 from app.api.schedules import router as schedules_router
 from app.api.settings import router as settings_router
+from app.api.health import router as health_router
 
 # API Routers
 app.include_router(stacks_router, prefix="/api")
 app.include_router(backups_router, prefix="/api")
 app.include_router(schedules_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
+app.include_router(health_router, prefix="/api")
 
 # Static Files
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

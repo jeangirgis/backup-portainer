@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>History | Portainer Backup Companion</title>
+    <meta name="description" content="Backup history and restore management for Portainer stacks">
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 </head>
@@ -20,12 +21,15 @@
         </header>
 
         <main>
-            <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <div class="section-header">
                 <h2>Backup History</h2>
                 <button class="btn btn-outline" hx-get="/api/backups" hx-target="#backup-list" hx-swap="innerHTML">
                     Refresh
                 </button>
             </div>
+
+            <!-- Restore feedback toast area -->
+            <div id="restore-toast" style="margin-bottom: 1.5rem;"></div>
 
             <div class="card" style="padding: 0; overflow: hidden;">
                 <table>
@@ -34,15 +38,16 @@
                             <th>Stack Name</th>
                             <th>Status</th>
                             <th>Size</th>
+                            <th>Triggered By</th>
                             <th>Date</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="backup-list" hx-get="/api/backups" hx-trigger="load">
                         <tr>
-                            <td colspan="5" style="text-align: center; padding: 3rem;">
+                            <td colspan="6" style="text-align: center; padding: 3rem;">
                                 <div class="spinner" style="margin: 0 auto 1rem;"></div>
-                                Loading history...
+                                <span style="color: var(--text-muted);">Loading history...</span>
                             </td>
                         </tr>
                     </tbody>
