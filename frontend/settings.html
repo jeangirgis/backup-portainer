@@ -20,63 +20,337 @@
             </nav>
         </header>
 
-        <main style="max-width: 800px; margin: 0 auto;">
-            <!-- Authentication -->
-            <div class="card" style="margin-bottom: 2rem;">
-                <h3 style="margin-bottom: 1.5rem;">🔐 Authentication</h3>
-                <div class="form-group">
-                    <label class="form-label">Companion Secret Key</label>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <input type="password" id="secret-key-input" class="form-input" style="flex: 1;">
-                        <button class="btn btn-primary" onclick="saveSecretKey(document.getElementById('secret-key-input').value)">Save</button>
+        <main style="max-width: 860px; margin: 0 auto;">
+            <!-- Tab Navigation -->
+            <div class="settings-tabs" id="settings-tabs">
+                <button class="tab-btn active" onclick="selectTab('general')" id="tab-general">⚙️ General</button>
+                <button class="tab-btn" onclick="selectTab('storage')" id="tab-storage">💾 Storage</button>
+                <button class="tab-btn" onclick="selectTab('notifications')" id="tab-notifications">🔔 Notifications</button>
+            </div>
+
+            <!-- ═══════════════════════════════════════ -->
+            <!-- TAB 1: GENERAL                          -->
+            <!-- ═══════════════════════════════════════ -->
+            <div class="tab-content active" id="content-general">
+                <!-- Authentication -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <h3 class="settings-section-title"><span class="icon">🔐</span> Authentication</h3>
+                    <div class="form-group">
+                        <label class="form-label">Companion Secret Key</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="password" id="secret-key-input" class="form-input" style="flex: 1;">
+                            <button class="btn btn-primary" onclick="saveSecretKey(document.getElementById('secret-key-input').value)">Save</button>
+                        </div>
+                        <p class="form-hint">This key must match the <code>SECRET_KEY</code> environment variable.</p>
                     </div>
-                    <p class="form-hint">This key must match the <code>SECRET_KEY</code> environment variable.</p>
+                </div>
+
+                <!-- System Configuration -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <h3 class="settings-section-title"><span class="icon">⚙️</span> System Configuration</h3>
+                    <div id="settings-info" hx-get="/api/settings" hx-trigger="load">
+                        <div class="spinner"></div>
+                    </div>
+                    <hr class="divider">
+                    <button class="btn btn-outline" hx-post="/api/settings/test" hx-target="#test-result">
+                        Test Portainer Connection
+                    </button>
+                    <div id="test-result" style="margin-top: 1rem;"></div>
+                </div>
+
+                <!-- System Health -->
+                <div class="card">
+                    <h3 class="settings-section-title"><span class="icon">📊</span> System Health</h3>
+                    <div id="health-detail" hx-get="/api/health" hx-trigger="load">
+                        <div class="spinner"></div>
+                    </div>
                 </div>
             </div>
 
-            <!-- System Configuration -->
-            <div class="card" style="margin-bottom: 2rem;">
-                <h3 style="margin-bottom: 1.5rem;">⚙️ System Configuration</h3>
-                <div id="settings-info" hx-get="/api/settings" hx-trigger="load">
-                    <div class="spinner"></div>
+            <!-- ═══════════════════════════════════════ -->
+            <!-- TAB 2: STORAGE                          -->
+            <!-- ═══════════════════════════════════════ -->
+            <div class="tab-content" id="content-storage">
+                <div class="card">
+                    <h3 class="settings-section-title"><span class="icon">💾</span> Storage Provider</h3>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+                        Select where your backups will be stored. Click a provider to configure it.
+                    </p>
+
+                    <!-- Provider Cards -->
+                    <div class="provider-grid" id="provider-grid">
+                        <div class="provider-card active" onclick="selectStorage('local')" id="card-local">
+                            <span class="provider-icon">📁</span>
+                            <span class="provider-name">Local</span>
+                            <span class="provider-desc">Store on disk</span>
+                        </div>
+                        <div class="provider-card" onclick="selectStorage('s3')" id="card-s3">
+                            <span class="provider-icon">☁️</span>
+                            <span class="provider-name">S3</span>
+                            <span class="provider-desc">AWS / MinIO</span>
+                        </div>
+                        <div class="provider-card" onclick="selectStorage('sftp')" id="card-sftp">
+                            <span class="provider-icon">🔒</span>
+                            <span class="provider-name">SFTP</span>
+                            <span class="provider-desc">Remote server</span>
+                        </div>
+                        <div class="provider-card" onclick="selectStorage('gdrive')" id="card-gdrive">
+                            <span class="provider-icon">📤</span>
+                            <span class="provider-name">Google Drive</span>
+                            <span class="provider-desc">Cloud storage</span>
+                        </div>
+                    </div>
+
+                    <!-- Local Config -->
+                    <div class="config-panel" id="config-local">
+                        <div class="form-group">
+                            <label class="form-label">Backup Directory</label>
+                            <input type="text" class="form-input" id="local-backup-dir" value="/backups" placeholder="/backups">
+                            <p class="form-hint">Absolute path inside the container where backups are stored.</p>
+                        </div>
+                    </div>
+
+                    <!-- S3 Config -->
+                    <div class="config-panel hidden" id="config-s3">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Bucket Name</label>
+                                <input type="text" class="form-input" id="s3-bucket" placeholder="my-backups-bucket">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Region</label>
+                                <input type="text" class="form-input" id="s3-region" value="us-east-1" placeholder="us-east-1">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Access Key</label>
+                                <input type="text" class="form-input" id="s3-access-key" placeholder="AKIAIOSFODNN7EXAMPLE">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Secret Key</label>
+                                <input type="password" class="form-input" id="s3-secret-key" placeholder="••••••••">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Endpoint URL <span style="color: var(--text-muted); font-size: 0.6rem; text-transform: none;">(MinIO / custom)</span></label>
+                                <input type="text" class="form-input" id="s3-endpoint" placeholder="https://minio.example.com">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Prefix</label>
+                                <input type="text" class="form-input" id="s3-prefix" value="backups/" placeholder="backups/">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SFTP Config -->
+                    <div class="config-panel hidden" id="config-sftp">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Host</label>
+                                <input type="text" class="form-input" id="sftp-host" placeholder="backup-server.example.com">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Port</label>
+                                <input type="text" class="form-input" id="sftp-port" value="22" placeholder="22">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Username</label>
+                                <input type="text" class="form-input" id="sftp-user" placeholder="backup">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Password</label>
+                                <input type="password" class="form-input" id="sftp-password" placeholder="••••••••">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">SSH Key Path <span style="color: var(--text-muted); font-size: 0.6rem; text-transform: none;">(optional)</span></label>
+                                <input type="text" class="form-input" id="sftp-key-path" placeholder="/run/secrets/sftp_key">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Remote Directory</label>
+                                <input type="text" class="form-input" id="sftp-remote-dir" value="/backups" placeholder="/backups">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Google Drive Config -->
+                    <div class="config-panel hidden" id="config-gdrive">
+                        <div class="form-group">
+                            <label class="form-label">Google Drive Folder ID</label>
+                            <input type="text" class="form-input" id="gdrive-folder-id" placeholder="1A2B3C4D5E6F7G8H9I0J...">
+                            <p class="form-hint">Extract from the folder URL: the string after <code>folders/</code></p>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Service Account JSON Key</label>
+                            <textarea class="form-input" id="gdrive-credentials" placeholder='{"type": "service_account", "project_id": "...", ...}'></textarea>
+                            <p class="form-hint">Paste the full JSON key from Google Cloud Console → IAM → Service Accounts.</p>
+                        </div>
+                    </div>
+
+                    <!-- Storage Action Bar -->
+                    <div class="action-bar">
+                        <button class="test-btn" onclick="testStorage()" id="btn-test-storage">🔌 Test Connection</button>
+                        <button class="btn btn-primary" onclick="saveStorage()" id="btn-save-storage">💾 Save & Apply</button>
+                    </div>
+                    <div id="storage-result"></div>
                 </div>
-                
-                <hr class="divider">
-                
-                <button class="btn btn-outline" hx-post="/api/settings/test" hx-target="#test-result">
-                    Test Portainer Connection
-                </button>
-                <div id="test-result" style="margin-top: 1rem;"></div>
             </div>
 
-            <!-- Google Drive Setup Instructions -->
-            <div class="card" style="margin-bottom: 2rem;">
-                <h3 style="margin-bottom: 1rem;">☁️ Google Drive Setup</h3>
-                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-                    If you want to use Google Drive as your storage backend (<code>STORAGE_BACKEND=gdrive</code>), you must set up a Google Service Account.
-                </p>
-                <ol style="font-size: 0.85rem; color: var(--text-muted); padding-left: 1.5rem; line-height: 1.6;">
-                    <li>Go to the <a href="https://console.cloud.google.com/" target="_blank" style="color: var(--primary);">Google Cloud Console</a>.</li>
-                    <li>Create a Project and enable the <strong>Google Drive API</strong>.</li>
-                    <li>Navigate to <strong>IAM & Admin > Service Accounts</strong> and create a new Service Account.</li>
-                    <li>Create a <strong>JSON Key</strong> for that Service Account and save it as <code>credentials.json</code>.</li>
-                    <li>Create a folder in your personal Google Drive and <strong>Share</strong> it with the Service Account's email address (give it Editor access).</li>
-                    <li>Extract the Folder ID from the URL (the long string of characters after <code>folders/</code>).</li>
-                    <li>Mount the <code>credentials.json</code> file into your docker container and set <code>GDRIVE_FOLDER_ID</code> in your <code>.env</code> file.</li>
-                </ol>
-            </div>
+            <!-- ═══════════════════════════════════════ -->
+            <!-- TAB 3: NOTIFICATIONS                    -->
+            <!-- ═══════════════════════════════════════ -->
+            <div class="tab-content" id="content-notifications">
+                <div class="card">
+                    <h3 class="settings-section-title"><span class="icon">🔔</span> Notification Channels</h3>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+                        Configure how you receive backup alerts. Enable channels and test them before saving.
+                    </p>
 
-            <!-- System Health -->
-            <div class="card">
-                <h3 style="margin-bottom: 1.5rem;">📊 System Health</h3>
-                <div id="health-detail" hx-get="/api/health" hx-trigger="load">
-                    <div class="spinner"></div>
+                    <!-- EMAIL -->
+                    <div class="notif-channel" id="channel-email">
+                        <div class="notif-channel-header" onclick="toggleChannel('email')">
+                            <span class="notif-channel-title">📧 Email (SMTP)</span>
+                            <label class="toggle-switch" onclick="event.stopPropagation()">
+                                <input type="checkbox" id="notif-email-enabled" onchange="updateChannelState('email')">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="notif-channel-body">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">SMTP Host</label>
+                                    <input type="text" class="form-input" id="smtp-host" placeholder="smtp.gmail.com">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">SMTP Port</label>
+                                    <input type="text" class="form-input" id="smtp-port" value="587" placeholder="587">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Username</label>
+                                    <input type="text" class="form-input" id="smtp-user" placeholder="user@gmail.com">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Password</label>
+                                    <input type="password" class="form-input" id="smtp-password" placeholder="••••••••">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">From Address</label>
+                                    <input type="text" class="form-input" id="email-from" placeholder="backup@yourcompany.com">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">To Address</label>
+                                    <input type="text" class="form-input" id="email-to" placeholder="admin@yourcompany.com">
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem;">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="smtp-tls" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span style="font-size: 0.8rem; color: var(--text-muted);">Use STARTTLS</span>
+                                <span style="flex: 1;"></span>
+                                <button class="test-btn" onclick="testNotification('email')">📤 Send Test</button>
+                            </div>
+                            <div id="email-test-result"></div>
+                        </div>
+                    </div>
+
+                    <!-- TELEGRAM -->
+                    <div class="notif-channel" id="channel-telegram">
+                        <div class="notif-channel-header" onclick="toggleChannel('telegram')">
+                            <span class="notif-channel-title">🤖 Telegram</span>
+                            <label class="toggle-switch" onclick="event.stopPropagation()">
+                                <input type="checkbox" id="notif-telegram-enabled" onchange="updateChannelState('telegram')">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="notif-channel-body">
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.5; background: rgba(139,92,246,0.06); padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(139,92,246,0.15);">
+                                <strong>Setup:</strong> 1) Message <code>@BotFather</code> on Telegram → <code>/newbot</code><br>
+                                2) Copy the bot token below<br>
+                                3) Add the bot to a group or message it directly<br>
+                                4) Get chat ID from <code>https://api.telegram.org/bot{TOKEN}/getUpdates</code>
+                            </p>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Bot Token</label>
+                                    <input type="password" class="form-input" id="telegram-token" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v...">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Chat ID</label>
+                                    <input type="text" class="form-input" id="telegram-chat-id" placeholder="-1001234567890">
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+                                <button class="test-btn" onclick="testNotification('telegram')">📤 Send Test</button>
+                            </div>
+                            <div id="telegram-test-result"></div>
+                        </div>
+                    </div>
+
+                    <!-- SLACK -->
+                    <div class="notif-channel" id="channel-slack">
+                        <div class="notif-channel-header" onclick="toggleChannel('slack')">
+                            <span class="notif-channel-title">💬 Slack</span>
+                            <label class="toggle-switch" onclick="event.stopPropagation()">
+                                <input type="checkbox" id="notif-slack-enabled" onchange="updateChannelState('slack')">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="notif-channel-body">
+                            <div class="form-group">
+                                <label class="form-label">Webhook URL</label>
+                                <input type="text" class="form-input" id="slack-webhook" placeholder="https://hooks.slack.com/services/T00.../B00.../xxxx">
+                            </div>
+                            <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+                                <button class="test-btn" onclick="testNotification('slack')">📤 Send Test</button>
+                            </div>
+                            <div id="slack-test-result"></div>
+                        </div>
+                    </div>
+
+                    <!-- WEBHOOK -->
+                    <div class="notif-channel" id="channel-webhook">
+                        <div class="notif-channel-header" onclick="toggleChannel('webhook')">
+                            <span class="notif-channel-title">🔗 Generic Webhook</span>
+                            <label class="toggle-switch" onclick="event.stopPropagation()">
+                                <input type="checkbox" id="notif-webhook-enabled" onchange="updateChannelState('webhook')">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="notif-channel-body">
+                            <div class="form-group">
+                                <label class="form-label">Webhook URL</label>
+                                <input type="text" class="form-input" id="webhook-url" placeholder="https://your-server.com/hooks/backup">
+                                <p class="form-hint">Receives a JSON POST with backup job data on each event.</p>
+                            </div>
+                            <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+                                <button class="test-btn" onclick="testNotification('webhook')">📤 Send Test</button>
+                            </div>
+                            <div id="webhook-test-result"></div>
+                        </div>
+                    </div>
+
+                    <!-- Save All -->
+                    <div class="action-bar">
+                        <button class="btn btn-primary" onclick="saveNotifications()" id="btn-save-notif">💾 Save All Notifications</button>
+                    </div>
+                    <div id="notif-save-result"></div>
                 </div>
             </div>
 
             <!-- Version -->
             <p style="text-align: center; margin-top: 2rem; font-size: 0.75rem; color: var(--text-muted);">
-                Portainer Backup Companion v2.0.0
+                Portainer Backup Companion v2.1.0
             </p>
         </main>
     </div>

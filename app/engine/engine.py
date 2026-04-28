@@ -26,7 +26,6 @@ class BackupEngine:
         )
         self.volume_exporter = VolumeExporter()
         self.packager = Packager()
-        self.storage = self.settings.get_storage_driver()
 
     async def create_job(self, stack_id: str, triggered_by: str = "manual") -> BackupJob:
         async with AsyncSessionLocal() as db:
@@ -76,7 +75,8 @@ class BackupEngine:
                 logger.info(f"Bundle created: {bundle_path.name} ({bundle_path.stat().st_size} bytes)")
 
                 # Upload
-                storage_path = await self.storage.upload(bundle_path, bundle_path.name)
+                storage = self.settings.get_storage_driver()
+                storage_path = await storage.upload(bundle_path, bundle_path.name)
 
                 # Finalize
                 job.status = "success"

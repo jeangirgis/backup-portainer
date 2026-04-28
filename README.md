@@ -8,39 +8,29 @@ A lightweight, self-hosted companion for Portainer that provides automated and o
 - **Volume Backups:** Automatically tar and compress Docker volumes attached to your stacks.
 - **Scheduling:** Flexible cron-based schedules for automated backups.
 - **Retention:** Automatic cleanup of old backups based on a configurable retention period.
-- **Storage Backends:** Support for Local Disk, S3-compatible storage (MinIO, AWS, R2), and SFTP.
-- **Notifications:** Get notified via Slack, Email, or Webhooks on backup success or failure.
+- **Storage Backends:** Support for Local Disk, S3-compatible storage (MinIO, AWS, R2), SFTP, and Google Drive.
+- **Notifications:** Get notified via Telegram, Slack, Email (SMTP), or Webhooks on backup success or failure.
 - **HTMX Dashboard:** A modern, responsive UI with no complex frontend build required.
 
 ## Quick Start
 
-### 1. Deploy via Portainer
+### 1. Deploy via Portainer (Git Repository)
 
-Create a new stack in Portainer and paste the following `docker-compose.yml`:
+Adding Portainer Backup Companion to your Portainer instance via a Git repository is the recommended approach for easy updates. Follow these simple steps:
 
-```yaml
-version: '3.8'
-
-services:
-  backup-companion:
-    image: portainer-backup-companion:latest
-    container_name: portainer-backup-companion
-    restart: unless-stopped
-    ports:
-      - "8765:8000"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - backup_data:/backups
-    environment:
-      - PORTAINER_URL=http://portainer:9000
-      - PORTAINER_API_TOKEN=your_token_here
-      - SECRET_KEY=your_secret_key_here
-      - STORAGE_BACKEND=local
-      - LOCAL_BACKUP_DIR=/backups
-
-volumes:
-  backup_data:
-```
+1. **Log in** to your Portainer dashboard and select your environment (e.g., "local").
+2. Navigate to **Stacks** in the left-hand menu.
+3. Click the **+ Add stack** button in the top right corner.
+4. Enter a name for the stack (e.g., `backup-companion`).
+5. Select the **Repository** build method.
+6. In the **Repository URL** field, enter the URL of this repository:
+   `https://github.com/jeangirgis/backup-portainer.git`
+7. Ensure the **Compose path** is set to `docker-compose.yml`.
+8. Scroll down to the **Environment variables** section and click **Add environment variable** to configure the required settings:
+   - `PORTAINER_URL`: The URL of your Portainer instance (e.g., `http://portainer:9000`)
+   - `PORTAINER_API_TOKEN`: Your generated Portainer API token
+   - `SECRET_KEY`: A secure random string for authenticating to the companion dashboard
+9. Click the **Deploy the stack** button at the bottom of the page.
 
 ### 2. Configuration
 

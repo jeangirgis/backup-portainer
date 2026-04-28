@@ -73,7 +73,7 @@ class Scheduler:
             )
             old_jobs = result.scalars().all()
             
-            driver = self.engine.storage
+            driver = self.engine.settings.get_storage_driver()
             for job in old_jobs:
                 logger.info(f"Retention: deleting old backup {job.id} for stack {stack_id}")
                 if job.storage_path:
