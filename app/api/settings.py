@@ -196,10 +196,13 @@ async def test_storage(request: Request):
             folder_id = config.get("folder_id") or settings.GDRIVE_FOLDER_ID
             if not folder_id:
                 return {"status": "error", "message": "No folder ID configured"}
-            result = service.files().list(
-                q=f"'{folder_id}' in parents", pageSize=1, fields="files(id, name)"
-            ).execute()
-            return {"status": "ok", "message": f"Google Drive folder is accessible"}
+            
+            # Try to get the folder itself to verify access
+            try:
+                folder = service.files().get(fileId=folder_id, fields="id, name").execute()
+                return {"status": "ok", "message": f"Google Drive folder '{folder.get('name', 'accessible')}' is ready"}
+            except Exception as e:
+                return {"status": "error", "message": f"Cannot access folder ID. Did you share it with the service account email? Error: {e}"}
 
         return {"status": "error", "message": f"Unknown backend: {backend}"}
 
