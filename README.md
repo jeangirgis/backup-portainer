@@ -83,20 +83,138 @@ Set `STORAGE_BACKEND=local`
 
 #### Option 2: Google Drive
 Set `STORAGE_BACKEND=gdrive`
-*   **Account Requirements:** Yes, a normal, free personal Gmail account will work perfectly! You just need to use the Google Cloud Console to create a Service Account. (Google Workspace accounts work fine too).
-*   **How it works (JSON Key vs OAuth2):** The app uses a Google Service Account JSON Key. This uses server-to-server OAuth2 securely under the hood, meaning you don't have to deal with annoying browser consent screens. You simply generate the JSON file once and paste it into the app.
-*   **The Easy Way:** You do not need to set environment variables for credentials. Just open the Backup Companion Web Dashboard, go to **Settings**, and paste your JSON credentials in the Google Drive Configuration form!
-*   **How to get the credentials:**
-    1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
-    2. Create a new Project (or select an existing one) and search for **Google Drive API** at the top. Click **Enable**.
-    3. Go to **IAM & Admin > Service Accounts** in the left menu.
-    4. Click **Create Service Account**, name it, and click Done.
-    5. Click the 3 dots next to the new service account -> **Manage keys**.
-    6. Click **Add Key -> Create new key -> JSON**. This will download a file to your computer. You will paste the contents of this file into the Web Dashboard.
-*   **How to get the Folder ID:**
-    1. Open your Google Drive and create a new folder (e.g., "Portainer Backups").
-    2. Right-click the folder and click **Share**. Share it with the email address of the Service Account you just created (give it "Editor" access).
-    3. Look at the URL in your browser. It looks like `https://drive.google.com/drive/folders/1A2B3C4D5E6F7G8H9I0J`. The long random string at the end is your Folder ID.
+
+> ⚠️ **CRITICAL: You MUST use a Shared Drive (Google Workspace) — NOT a regular folder!**
+> Google Service Accounts have **0 bytes of personal storage quota**. If you upload to a regular Google Drive folder (even one shared with the service account), the upload will fail with the error: `"Service Accounts do not have storage quota"`. The only way to make this work is by uploading to a **Shared Drive** (formerly called Team Drive), which uses the organization's storage pool instead of the service account's personal (empty) quota.
+
+---
+
+##### Understanding the Problem
+
+When you create a Google Service Account, Google gives it its own "personal" Drive space — but with **zero storage**. This means:
+
+| Scenario | Works? | Why |
+|----------|--------|-----|
+| Upload to a **regular folder** shared with the service account | ❌ **NO** | The file counts against the service account's quota (0 bytes) |
+| Upload to a **Shared Drive** where the service account is a member | ✅ **YES** | The file counts against the Shared Drive's pool (your org's storage) |
+| Test Connection to a regular folder | ✅ YES (misleading!) | Testing only checks folder access, not upload quota |
+
+This is why "Test Connection" can show ✅ success but backups still fail — the test only verifies the service account can *see* the folder, not that it can *write* files to it.
+
+The exact error you'll see in the backup History if this is misconfigured:
+```
+HttpError 403: Service Accounts do not have storage quota.
+Leverage shared drives (https://developers.google.com/workspace/drive/api/guides/about-shareddrives),
+or use OAuth delegation instead.
+Details: [{'domain': 'usageLimits', 'reason': 'storageQuotaExceeded'}]
+```
+
+---
+
+##### Account Requirements
+
+| Account Type | Shared Drives Available? | Can Use Google Drive Backup? |
+|---|---|---|
+| **Google Workspace** (Business, Enterprise, Education) | ✅ Yes | ✅ Yes — follow the steps below |
+| **Free personal Gmail** (@gmail.com) | ❌ No | ❌ **No** — Shared Drives are a Workspace-only feature. Use Local, S3, or SFTP instead. |
+
+> 💡 **If you only have a free Gmail account**, Google Drive backup will **not work** with a Service Account. Consider using one of the other storage backends (Local Disk, S3/MinIO/R2, or SFTP).
+
+---
+
+##### Step 1: Create a Google Cloud Service Account & JSON Key
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Create a new Project (or select an existing one).
+3. Search for **"Google Drive API"** in the top search bar. Click on it and click **Enable**.
+4. In the left menu, go to **IAM & Admin → Service Accounts**.
+5. Click **+ Create Service Account**.
+   - Give it a name (e.g., `portainer-backup`).
+   - Click **Done** (no need to grant additional roles).
+6. Back on the Service Accounts list, click the **3 dots (⋮)** next to your new account → **Manage keys**.
+7. Click **Add Key → Create new key → JSON**.
+8. A `.json` file will download to your computer. **Keep this file safe** — you'll paste its contents into the Backup Companion dashboard.
+9. **Copy the service account email** (it looks like `your-name@your-project.iam.gserviceaccount.com`). You'll need this in Step 2.
+
+---
+
+##### Step 2: Create a Shared Drive and Add the Service Account
+
+> ⚠️ This step requires a **Google Workspace** account. Shared Drives are NOT available on free Gmail.
+
+1. Open [Google Drive](https://drive.google.com) in your browser (logged in with your Workspace account).
+2. In the left sidebar, click **Shared drives**.
+3. Click **+ New** (or **"+ Create shared drive"**) at the top left.
+4. Name it something like **"Portainer Backups"** and click **Create**.
+5. You should now be inside the new Shared Drive. Click the **gear icon (⚙️)** or the Shared Drive name at the top → **Manage members**.
+6. In the **"Add people"** field, paste the **service account email** from Step 1.
+7. Set the role to **Content Manager** (or **Manager**). This gives the service account permission to upload and delete files.
+8. Click **Send** / **Share**.
+
+---
+
+##### Step 3: Get the Shared Drive Folder ID
+
+You can upload to the root of the Shared Drive, or create a subfolder inside it.
+
+**Option A — Use the Shared Drive root:**
+1. Open the Shared Drive you just created.
+2. Look at the URL in your browser. It looks like:
+   ```
+   https://drive.google.com/drive/u/0/folders/0ABcDeFgHiJkLmNoPq
+   ```
+3. The long string after `folders/` is your **Folder ID** (e.g., `0ABcDeFgHiJkLmNoPq`).
+
+**Option B — Use a subfolder inside the Shared Drive:**
+1. Inside your Shared Drive, create a new folder (e.g., "Daily Backups").
+2. Open that folder and copy the ID from the URL the same way.
+
+> 📝 **Important:** The Folder ID for a Shared Drive root usually starts with `0A...`. Regular folder IDs start with `1...`. If your ID starts with `1`, double-check that it's inside a Shared Drive and not a regular personal folder.
+
+---
+
+##### Step 4: Configure in the Web Dashboard
+
+1. Open the Backup Companion dashboard at `http://your-ip:8765`.
+2. Go to **Settings → Storage** tab.
+3. Click the **Google Drive** provider card.
+4. Paste your **Folder ID** (from Step 3) into the **Google Drive Folder ID** field.
+5. Paste the **entire contents** of your downloaded JSON key file into the **Service Account JSON Key** textarea.
+6. Click **💾 Save & Apply**.
+7. Click **🔌 Test Connection** to verify access.
+8. Go to the **Dashboard** and try **Backup Now** on a stack to confirm uploads work end-to-end.
+
+> ⚠️ **"Test Connection" passing does NOT guarantee backups will work!** The test only checks if the service account can access the folder. The actual upload can still fail if the folder is not on a Shared Drive. Always do a real test backup after configuring.
+
+---
+
+##### Troubleshooting Google Drive
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| `storageQuotaExceeded` / "Service Accounts do not have storage quota" | Uploading to a regular folder, not a Shared Drive | Move your folder to a Shared Drive (see Step 2 above) |
+| `Test Connection` says "ok" but backups fail | Test only checks access, not upload quota | Do a real backup to test. If it fails with quota error, you need a Shared Drive |
+| `404 File not found` when accessing the folder | Folder not shared with the service account, or wrong Folder ID | Re-share the Shared Drive with the service account email (Step 2) |
+| `403 Insufficient permissions` | Service account doesn't have write access | Make sure the service account is a **Content Manager** or **Manager** on the Shared Drive |
+| `Invalid JSON` when saving credentials | Incomplete or malformed JSON key | Make sure you pasted the ENTIRE JSON file contents, including the opening `{` and closing `}` |
+| Backups succeed but files don't appear in Google Drive web UI | Files are in the Shared Drive but you're looking in "My Drive" | Open the **Shared drives** section in the left sidebar of Google Drive |
+
+---
+
+##### Alternative: Environment Variables (Advanced)
+
+Instead of using the web dashboard, you can configure Google Drive via environment variables in your `docker-compose.yml`:
+
+```yaml
+environment:
+  - STORAGE_BACKEND=gdrive
+  - GDRIVE_FOLDER_ID=your_shared_drive_folder_id
+  - GDRIVE_CREDENTIALS_FILE=/app/credentials.json
+volumes:
+  - ./credentials.json:/app/credentials.json:ro
+```
+
+Place your downloaded JSON key file as `credentials.json` next to your `docker-compose.yml`.
 
 #### Option 3: S3 / AWS / MinIO / Cloudflare R2
 Set `STORAGE_BACKEND=s3`
