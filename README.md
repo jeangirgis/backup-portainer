@@ -69,6 +69,18 @@ Set `STORAGE_BACKEND=local`
 *   No extra configuration needed. Backups will be stored inside the container at `/backups`.
 *   **Important (How Volumes Work):** Docker containers are temporary. If you restart, update, or delete the container, any files saved inside it are destroyed. To prevent losing your backups, you must map a "Volume" from your actual server to the `/backups` folder inside the container. If you used the `docker-compose.yml` from this repository, it automatically creates a volume called `backup_data` and maps it securely to `/backups`, keeping your files safe on your server's hard drive.
 
+    **Want to save backups to a specific folder on your server?**
+    Run this script on your server to create a dedicated backup folder and give Docker permission to write to it:
+    ```bash
+    mkdir -p /opt/portainer-backups
+    chmod 777 /opt/portainer-backups
+    ```
+    Then, in your Portainer stack editor, change the `volumes:` section to point to your new folder:
+    ```yaml
+    volumes:
+      - /opt/portainer-backups:/backups
+    ```
+
 #### Option 2: Google Drive
 Set `STORAGE_BACKEND=gdrive`
 *   **Account Requirements:** Yes, a normal, free personal Gmail account will work perfectly! You just need to use the Google Cloud Console to create a Service Account. (Google Workspace accounts work fine too).
