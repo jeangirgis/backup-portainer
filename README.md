@@ -16,33 +16,25 @@ A lightweight, self-hosted companion for Portainer that provides automated and o
 
 ## Quick Start
 
-### 1. Deploy via Portainer
+### 1. Deploy via Portainer (Git Repository)
 
-Create a new stack in Portainer and paste the following `docker-compose.yml`:
+Adding Portainer Backup Companion to your Portainer instance via a Git repository is the recommended approach for easy updates. Follow these simple steps:
 
-```yaml
-version: '3.8'
-
-services:
-  backup-companion:
-    image: portainer-backup-companion:latest
-    container_name: portainer-backup-companion
-    restart: unless-stopped
-    ports:
-      - "8765:8000"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - backup_data:/backups
-    environment:
-      - PORTAINER_URL=http://portainer:9000
-      - PORTAINER_API_TOKEN=your_token_here
-      - SECRET_KEY=your_secret_key_here
-      - STORAGE_BACKEND=local
-      - LOCAL_BACKUP_DIR=/backups
-
-volumes:
-  backup_data:
-```
+1. **Log in** to your Portainer dashboard and select your environment (e.g., "local").
+2. Navigate to **Stacks** in the left-hand menu.
+3. Click the **+ Add stack** button in the top right corner.
+4. Enter a name for the stack (e.g., `backup-companion`).
+5. Select the **Repository** build method.
+6. In the **Repository URL** field, enter the URL of this repository:
+   `https://github.com/jeangirgis/backup-portainer.git`
+7. Ensure the **Compose path** is set to `docker-compose.yml`.
+8. Scroll down to the **Environment variables** section and click **Add environment variable** to configure the required settings:
+   - `PORTAINER_URL`: The URL of your Portainer instance (e.g., `http://portainer:9000`)
+   - `PORTAINER_API_TOKEN`: Your generated Portainer API token
+   - `SECRET_KEY`: A secure random string for authenticating to the companion dashboard
+   - `STORAGE_BACKEND`: The storage method to use (e.g., `local`)
+   - `LOCAL_BACKUP_DIR`: `/backups`
+9. Click the **Deploy the stack** button at the bottom of the page.
 
 ### 2. Usage
 
@@ -75,11 +67,13 @@ First, set `STORAGE_BACKEND` to one of the following: `local`, `s3`, `sftp`, or 
 #### Option 1: Local Disk (Default)
 Set `STORAGE_BACKEND=local`
 *   No extra configuration needed. Backups will be stored inside the container at `/backups`.
-*   **Important:** Make sure you mount a volume to `/backups` in your `docker-compose.yml` so you don't lose the files if the container stops!
+*   **Important (How Volumes Work):** Docker containers are temporary. If you restart, update, or delete the container, any files saved inside it are destroyed. To prevent losing your backups, you must map a "Volume" from your actual server to the `/backups` folder inside the container. If you used the `docker-compose.yml` from this repository, it automatically creates a volume called `backup_data` and maps it securely to `/backups`, keeping your files safe on your server's hard drive.
 
 #### Option 2: Google Drive
 Set `STORAGE_BACKEND=gdrive`
-*   **The Easy Way:** You do not need to set environment variables for credentials. Just open the Backup Companion Web Dashboard, go to **Settings**, and paste your credentials in the Google Drive Configuration form!
+*   **Account Requirements:** Yes, a normal, free personal Gmail account will work perfectly! You just need to use the Google Cloud Console to create a Service Account. (Google Workspace accounts work fine too).
+*   **How it works (JSON Key vs OAuth2):** The app uses a Google Service Account JSON Key. This uses server-to-server OAuth2 securely under the hood, meaning you don't have to deal with annoying browser consent screens. You simply generate the JSON file once and paste it into the app.
+*   **The Easy Way:** You do not need to set environment variables for credentials. Just open the Backup Companion Web Dashboard, go to **Settings**, and paste your JSON credentials in the Google Drive Configuration form!
 *   **How to get the credentials:**
     1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
     2. Create a new Project (or select an existing one) and search for **Google Drive API** at the top. Click **Enable**.
