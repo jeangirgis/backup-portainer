@@ -51,14 +51,16 @@ class GoogleDriveDriver(StorageDriver):
             logger.info(f"Updating existing file in Google Drive: {remote_name} ({existing_file_id})")
             file = self.service.files().update(
                 fileId=existing_file_id,
-                media_body=media
+                media_body=media,
+                supportsAllDrives=True
             ).execute()
         else:
             logger.info(f"Uploading new file to Google Drive: {remote_name}")
             file = self.service.files().create(
                 body=file_metadata,
                 media_body=media,
-                fields='id'
+                fields='id',
+                supportsAllDrives=True
             ).execute()
             
         return file.get('id')
@@ -72,7 +74,7 @@ class GoogleDriveDriver(StorageDriver):
     def _sync_download(self, file_id: str, local_path: Path) -> None:
         from googleapiclient.http import MediaIoBaseDownload
         
-        request = self.service.files().get_media(fileId=file_id)
+        request = self.service.files().get_media(fileId=file_id, supportsAllDrives=True)
         with open(local_path, 'wb') as fh:
             downloader = MediaIoBaseDownload(fh, request)
             done = False
@@ -89,7 +91,7 @@ class GoogleDriveDriver(StorageDriver):
 
     def _sync_delete(self, file_id: str) -> None:
         try:
-            self.service.files().delete(fileId=file_id).execute()
+            self.service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
         except Exception as e:
             logger.error(f"Failed to delete file {file_id} from Google Drive: {e}")
 
@@ -107,7 +109,9 @@ class GoogleDriveDriver(StorageDriver):
             results = self.service.files().list(
                 q=query,
                 pageSize=100,
-                fields="nextPageToken, files(id, name, size, modifiedTime)"
+                fields="nextPageToken, files(id, name, size, modifiedTime)",
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True
             ).execute()
             
             items = results.get('files', [])
@@ -143,7 +147,9 @@ class GoogleDriveDriver(StorageDriver):
         results = self.service.files().list(
             q=query,
             pageSize=1,
-            fields="files(id)"
+            fields="files(id)",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True
         ).execute()
         items = results.get('files', [])
         if items:

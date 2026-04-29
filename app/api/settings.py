@@ -192,14 +192,18 @@ async def test_storage(request: Request):
             else:
                 return {"status": "error", "message": "No credentials found. Please save credentials first."}
 
-            service = build("drive", "v3", credentials=creds)
+            service = build("drive", "v3", credentials=creds, cache_discovery=False)
             folder_id = config.get("folder_id") or settings.GDRIVE_FOLDER_ID
             if not folder_id:
                 return {"status": "error", "message": "No folder ID configured"}
             
             # Try to get the folder itself to verify access
             try:
-                folder = service.files().get(fileId=folder_id, fields="id, name").execute()
+                folder = service.files().get(
+                    fileId=folder_id,
+                    fields="id, name",
+                    supportsAllDrives=True
+                ).execute()
                 return {"status": "ok", "message": f"Google Drive folder '{folder.get('name', 'accessible')}' is ready"}
             except Exception as e:
                 return {"status": "error", "message": f"Cannot access folder ID. Did you share it with the service account email? Error: {e}"}
