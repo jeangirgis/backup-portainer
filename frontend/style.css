@@ -1022,3 +1022,62 @@ select.form-input {
     table { font-size: 0.8rem; }
     td, th { padding: 0.75rem 0.5rem; }
 }
+
+
+/* Light Theme Overrides */
+[data-theme="light"] {
+    --primary: #7c3aed;
+    --primary-hover: #6d28d9;
+    --secondary: #0891b2;
+    --bg-dark: #f1f5f9;
+    --card-bg: rgba(255, 255, 255, 0.7);
+    --border: rgba(0, 0, 0, 0.1);
+    --border-highlight: rgba(0, 0, 0, 0.2);
+    --text: #0f172a;
+    --text-muted: #475569;
+}
+
+[data-theme="light"] input[type="text"], 
+[data-theme="light"] input[type="password"],
+[data-theme="light"] .form-input,
+[data-theme="light"] textarea,
+[data-theme="light"] code,
+[data-theme="light"] .settings-tabs {
+    background: rgba(255, 255, 255, 0.6) !important;
+}
+
+[data-theme="light"] th, 
+[data-theme="light"] .freq-btn, 
+[data-theme="light"] .ret-btn,
+[data-theme="light"] .config-panel {
+    background: rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-theme="light"] .provider-card {
+    background: rgba(255, 255, 255, 0.5) !important;
+}
+
+[data-theme="light"] .modal {
+    background: #ffffff;
+}
+
+[data-theme="light"] .modal-overlay {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+[data-theme="light"] .btn-outline:hover,
+[data-theme="light"] tr:hover td {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+[data-theme="light"] body::before {
+    background: 
+        radial-gradient(circle at 15% 50%, rgba(139, 92, 246, 0.08) 0%, transparent 25%),
+        radial-gradient(circle at 85% 30%, rgba(6, 182, 212, 0.05) 0%, transparent 25%);
+}
+
+[data-theme="light"] .log-container {
+    background-color: #f8fafc;
+    color: #333;
+    border-color: rgba(0,0,0,0.1);
+}

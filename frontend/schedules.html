@@ -7,6 +7,13 @@
     <meta name="description" content="Automated backup schedule management for Portainer stacks">
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        })();
+    </script>
 </head>
 <body>
     <div class="container">
@@ -18,6 +25,7 @@
                 <a href="schedules.html" class="active">Schedules</a>
                 <a href="logs.html">Logs</a>
                 <a href="settings.html">Settings</a>
+                <button class="btn btn-outline btn-sm" onclick="toggleTheme()" style="margin-left: 1rem; padding: 0.2rem 0.5rem; font-size: 0.7rem;">🌓 Theme</button>
             </nav>
         </header>
 
@@ -132,6 +140,12 @@
                 </div>
             </div>
         </main>
+        <footer class="app-footer">
+            <p style="text-align: center; font-size: 0.75rem; color: var(--text-muted);">
+                Backtainer v2.0 &mdash; Protecting your Docker infrastructure | Author: Jean Girgis
+            </p>
+        </footer>
+
     </div>
 
     <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
