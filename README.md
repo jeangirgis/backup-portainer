@@ -116,6 +116,9 @@ Backtainer uses the powerful **Apprise** library, allowing you to send backup su
    - **Telegram:** `tgram://bot_token/chat_id`
    - **Slack:** `slack://TokenA/TokenB/TokenC/Channel`
    - **Email:** `mailto://user:pass@gmail.com`
+   
+   > 💡 **Gmail Note:** Google blocks regular passwords for third-party apps. You must generate an **App Password** in your Google Account (under 2-Step Verification) and use that 16-character code as your password in the URL. Make sure to remove any spaces from the App Password! If your email is `user@gmail.com`, your URL should be formatted exactly like: `mailto://user:16charpassword@gmail.com`.
+
 4. Click **Send Test** to verify your setup, then click **Save All Notifications**.
 
 *(Legacy integrations for native Telegram, Slack Webhooks, and SMTP are still supported in the UI).*
