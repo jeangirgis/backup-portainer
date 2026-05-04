@@ -1,5 +1,8 @@
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import UploadFile, File
+import shutil
+import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from typing import List
@@ -32,6 +35,75 @@ class BackupJobSchema(BaseModel):
     created_at: datetime
     completed_at: datetime | None
     triggered_by: str
+
+
+@router.post("/upload")
+async def upload_backup_file(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    """Accept a .tar.gz file, inspect it, save to storage, and add to db."""
+    if not file.filename.endswith(".tar.gz"):
+        return HTMLResponse(content="""
+            <div class="toast toast-error"><span>❌</span> File must be a .tar.gz backup bundle.</div>
+        """)
+
+    # 1. Save locally first
+    local_path = Path(settings.LOCAL_BACKUP_DIR) / file.filename
+    with open(local_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    size_bytes = local_path.stat().st_size
+
+    # 2. Inspect manifest to get stack info
+    from app.engine.restore import inspect_backup
+    import asyncio
+    loop = asyncio.get_event_loop()
+    
+    try:
+        info = await loop.run_in_executor(None, inspect_backup, local_path)
+        manifest = info.get("manifest", {})
+        stack_info = manifest.get("stack", {})
+        stack_id = stack_info.get("id", "uploaded")
+        stack_name = stack_info.get("name", "Unknown (Uploaded)")
+    except Exception as e:
+        logger.error(f"Failed to inspect uploaded backup: {e}")
+        stack_id = "uploaded"
+        stack_name = "Unknown (Uploaded)"
+
+    # 3. Upload to configured storage backend
+    driver = settings.get_storage_driver()
+    try:
+        storage_path = await driver.upload(local_path, file.filename)
+    except Exception as e:
+        logger.error(f"Failed to upload to storage backend: {e}")
+        # Even if storage upload fails, we keep the local file and record it if local is the backend
+        storage_path = file.filename if settings.STORAGE_BACKEND == "local" else None
+        
+        if not storage_path:
+            # If not local and it failed to upload to remote, we should probably fail
+            return HTMLResponse(content=f"""
+                <div class="toast toast-error"><span>❌</span> Failed to save to storage backend: {e}</div>
+            """)
+
+    # 4. Save to Database
+    job_id = str(uuid.uuid4())
+    job = BackupJob(
+        id=job_id,
+        stack_id=stack_id,
+        stack_name=stack_name,
+        status="success",
+        storage_path=storage_path,
+        size_bytes=size_bytes,
+        triggered_by="manual (uploaded)",
+        created_at=datetime.utcnow(),
+        completed_at=datetime.utcnow()
+    )
+    db.add(job)
+    await db.commit()
+    
+    # Trigger refresh
+    return HTMLResponse(content="""
+        <div class="toast toast-success"><span>✅</span> Backup uploaded successfully! Refreshing...</div>
+        <script>setTimeout(() => htmx.ajax('GET', '/api/backups', '#backup-list'), 1500);</script>
+    """)
 
 
 @router.post("/{stack_id}", response_model=BackupJobSchema)
@@ -271,75 +343,6 @@ async def inspect_backup_endpoint(job_id: str, db: AsyncSession = Depends(get_db
     return info
 
 
-from fastapi import UploadFile, File
-import shutil
-import uuid
 
-@router.post("/upload")
-async def upload_backup_file(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
-    """Accept a .tar.gz file, inspect it, save to storage, and add to db."""
-    if not file.filename.endswith(".tar.gz"):
-        return HTMLResponse(content="""
-            <div class="toast toast-error"><span>❌</span> File must be a .tar.gz backup bundle.</div>
-        """)
 
-    # 1. Save locally first
-    local_path = Path(settings.LOCAL_BACKUP_DIR) / file.filename
-    with open(local_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        
-    size_bytes = local_path.stat().st_size
-
-    # 2. Inspect manifest to get stack info
-    from app.engine.restore import inspect_backup
-    import asyncio
-    loop = asyncio.get_event_loop()
-    
-    try:
-        info = await loop.run_in_executor(None, inspect_backup, local_path)
-        manifest = info.get("manifest", {})
-        stack_info = manifest.get("stack", {})
-        stack_id = stack_info.get("id", "uploaded")
-        stack_name = stack_info.get("name", "Unknown (Uploaded)")
-    except Exception as e:
-        logger.error(f"Failed to inspect uploaded backup: {e}")
-        stack_id = "uploaded"
-        stack_name = "Unknown (Uploaded)"
-
-    # 3. Upload to configured storage backend
-    driver = settings.get_storage_driver()
-    try:
-        storage_path = await driver.upload(local_path, file.filename)
-    except Exception as e:
-        logger.error(f"Failed to upload to storage backend: {e}")
-        # Even if storage upload fails, we keep the local file and record it if local is the backend
-        storage_path = file.filename if settings.STORAGE_BACKEND == "local" else None
-        
-        if not storage_path:
-            # If not local and it failed to upload to remote, we should probably fail
-            return HTMLResponse(content=f"""
-                <div class="toast toast-error"><span>❌</span> Failed to save to storage backend: {e}</div>
-            """)
-
-    # 4. Save to Database
-    job_id = str(uuid.uuid4())
-    job = BackupJob(
-        id=job_id,
-        stack_id=stack_id,
-        stack_name=stack_name,
-        status="success",
-        storage_path=storage_path,
-        size_bytes=size_bytes,
-        triggered_by="manual (uploaded)",
-        created_at=datetime.utcnow(),
-        completed_at=datetime.utcnow()
-    )
-    db.add(job)
-    await db.commit()
-    
-    # Trigger refresh
-    return HTMLResponse(content="""
-        <div class="toast toast-success"><span>✅</span> Backup uploaded successfully! Refreshing...</div>
-        <script>setTimeout(() => htmx.ajax('GET', '/api/backups', '#backup-list'), 1500);</script>
-    """)
 
