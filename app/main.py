@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     pass
 
-app = FastAPI(title="Portainer Backup Companion", lifespan=lifespan)
+app = FastAPI(title="Backtainer", lifespan=lifespan)
 
 # CORS
 app.add_middleware(

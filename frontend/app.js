@@ -1,5 +1,5 @@
 // ============================================================
-// Portainer Backup Companion — Frontend Logic v2.1
+// Backtainer — Frontend Logic v2.1
 // ============================================================
 
 // --- Auth Token Management ---

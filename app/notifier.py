@@ -58,19 +58,19 @@ class Notifier:
     def _send_email(self, message: str, email_cfg: dict):
         try:
             msg = MIMEMultipart("alternative")
-            subject_line = message.splitlines()[0] if message.splitlines() else "Portainer Backup Notification"
-            msg['Subject'] = f"Portainer Backup: {subject_line}"
+            subject_line = message.splitlines()[0] if message.splitlines() else "Backtainer Notification"
+            msg['Subject'] = f"Backtainer: {subject_line}"
             msg['From'] = email_cfg.get("from_address", "")
             msg['To'] = email_cfg.get("to_address", "")
 
             # Create HTML version for better rendering
             html_body = f"""
             <div style="font-family: Arial, sans-serif; padding: 20px; background: #1a1a2e; color: #e0e0e0; border-radius: 12px;">
-                <h2 style="color: #8b5cf6; margin-bottom: 16px;">Portainer Backup Companion</h2>
+                <h2 style="color: #8b5cf6; margin-bottom: 16px;">Backtainer</h2>
                 <div style="background: #16213e; padding: 16px; border-radius: 8px; border-left: 4px solid #8b5cf6;">
                     <pre style="white-space: pre-wrap; margin: 0; font-size: 14px; color: #e0e0e0;">{message}</pre>
                 </div>
-                <p style="color: #666; font-size: 12px; margin-top: 16px;">Sent by Portainer Backup Companion</p>
+                <p style="color: #666; font-size: 12px; margin-top: 16px;">Sent by Backtainer</p>
             </div>
             """
             msg.attach(MIMEText(message, "plain"))

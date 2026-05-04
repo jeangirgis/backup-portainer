@@ -255,12 +255,12 @@ async def test_notification(request: Request):
         body = await request.json()
         channel = body.get("channel", "")
         config = body.get("config", {})
-        test_message = "🧪 Test notification from Portainer Backup Companion!\nIf you see this, your notification channel is configured correctly."
+        test_message = "🧪 Test notification from Backtainer!\nIf you see this, your notification channel is configured correctly."
 
         if channel == "email":
             try:
                 msg = MIMEText(test_message)
-                msg['Subject'] = "Portainer Backup — Test Notification"
+                msg['Subject'] = "Backtainer — Test Notification"
                 msg['From'] = config.get("from_address", "")
                 msg['To'] = config.get("to_address", "")
 

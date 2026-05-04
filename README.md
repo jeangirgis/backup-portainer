@@ -1,4 +1,5 @@
-# Portainer Backup Companion
+# Backtainer
+**Author**: Jean Girgis
 
 A lightweight, self-hosted companion for Portainer that provides automated and on-demand backups for your Docker stacks and volumes.
 
@@ -18,7 +19,7 @@ A lightweight, self-hosted companion for Portainer that provides automated and o
 
 ### 1. Deploy via Portainer (Git Repository)
 
-Adding Portainer Backup Companion to your Portainer instance via a Git repository is the recommended approach for easy updates. Follow these simple steps:
+Adding Backtainer to your Portainer instance via a Git repository is the recommended approach for easy updates. Follow these simple steps:
 
 1. **Log in** to your Portainer dashboard and select your environment (e.g., "local").
 2. Navigate to **Stacks** in the left-hand menu.
@@ -54,7 +55,7 @@ You can configure the application by setting **Environment Variables** in your P
 You MUST set these variables for the application to run.
 
 *   `PORTAINER_URL`: The full URL to your Portainer instance (e.g., `http://192.168.1.100:9000`).
-*   `SECRET_KEY`: Make up a random password. You will use this to log into the Backup Companion web dashboard.
+*   `SECRET_KEY`: Make up a random password. You will use this to log into the Backtainer web dashboard.
 *   `PORTAINER_API_TOKEN`:
     *   **How to get it:** Log into Portainer. Click your username in the top right -> **My account**. Scroll down to **API tokens**. Click **Add token**, give it a name (like "Backup App"), and copy the long string it gives you.
 
@@ -133,7 +134,7 @@ Details: [{'domain': 'usageLimits', 'reason': 'storageQuotaExceeded'}]
    - Click **Done** (no need to grant additional roles).
 6. Back on the Service Accounts list, click the **3 dots (⋮)** next to your new account → **Manage keys**.
 7. Click **Add Key → Create new key → JSON**.
-8. A `.json` file will download to your computer. **Keep this file safe** — you'll paste its contents into the Backup Companion dashboard.
+8. A `.json` file will download to your computer. **Keep this file safe** — you'll paste its contents into the Backtainer dashboard.
 9. **Copy the service account email** (it looks like `your-name@your-project.iam.gserviceaccount.com`). You'll need this in Step 2.
 
 ---
@@ -175,7 +176,7 @@ You can upload to the root of the Shared Drive, or create a subfolder inside it.
 
 ##### Step 4: Configure in the Web Dashboard
 
-1. Open the Backup Companion dashboard at `http://your-ip:8765`.
+1. Open the Backtainer dashboard at `http://your-ip:8765`.
 2. Go to **Settings → Storage** tab.
 3. Click the **Google Drive** provider card.
 4. Paste your **Folder ID** (from Step 3) into the **Google Drive Folder ID** field.

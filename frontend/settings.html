@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings | Portainer Backup Companion</title>
-    <meta name="description" content="Configuration and connection settings for Portainer Backup Companion">
+    <title>Settings | Backtainer</title>
+    <meta name="description" content="Configuration and connection settings for Backtainer">
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Portainer Backup Companion</h1>
+            <h1>Backtainer</h1>
             <nav>
                 <a href="index.html">Dashboard</a>
                 <a href="backups.html">History</a>
@@ -74,7 +74,8 @@
                 <div class="card">
                     <h3 class="settings-section-title"><span class="icon">💾</span> Storage Provider</h3>
                     <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">
-                        Select where your backups will be stored. Click a provider to configure it.
+                        Select where your backups will be stored. Click a provider to configure it.<br>
+                        <strong style="color: #8b5cf6;">Guide:</strong> Local storage saves to a container volume. Use Google Drive with a <strong>Shared Drive</strong> for cloud backups. S3 and SFTP are also supported for remote storage. Make sure to test your connection before saving!
                     </p>
 
                     <!-- Provider Cards -->
@@ -208,7 +209,8 @@
                 <div class="card">
                     <h3 class="settings-section-title"><span class="icon">🔔</span> Notification Channels</h3>
                     <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">
-                        Configure how you receive backup alerts. Enable channels and test them before saving.
+                        Configure how you receive backup alerts. Enable channels and test them before saving.<br>
+                        <strong style="color: #8b5cf6;">Guide:</strong> You can enable multiple channels at once. If a backup fails or succeeds, alerts are sent immediately. For Telegram, start a chat with your bot first. For Email, you may need an App Password (not your main password).
                     </p>
 
                     <!-- EMAIL -->
@@ -350,7 +352,7 @@
 
             <!-- Version -->
             <p style="text-align: center; margin-top: 2rem; font-size: 0.75rem; color: var(--text-muted);">
-                Portainer Backup Companion v2.1.0
+                Backtainer v2.1.0 | Author: Jean Girgis
             </p>
         </main>
     </div>
