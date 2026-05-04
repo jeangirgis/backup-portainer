@@ -7,12 +7,23 @@ from app.api.stacks import router as stacks_router
 from app.api.backups import router as backups_router
 from app.config import get_settings
 import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+
+settings = get_settings()
+
+log_file_path = Path(settings.LOCAL_BACKUP_DIR) / "companion.log"
+log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
 # Configure logging to show our debug messages
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%H:%M:%S",
+    handlers=[
+        logging.StreamHandler(),
+        RotatingFileHandler(log_file_path, maxBytes=5*1024*1024, backupCount=3)
+    ]
 )
 # Quiet down noisy libraries
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -20,7 +31,7 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
 logging.getLogger("uvicorn.access").setLevel(logging.INFO)
 
-settings = get_settings()
+# settings is already instantiated above
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -84,6 +95,7 @@ async def auth_middleware(request: Request, call_next):
 from app.api.schedules import router as schedules_router
 from app.api.settings import router as settings_router
 from app.api.health import router as health_router
+from app.api.logs import router as logs_router
 
 # API Routers
 app.include_router(stacks_router, prefix="/api")
@@ -91,6 +103,7 @@ app.include_router(backups_router, prefix="/api")
 app.include_router(schedules_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(health_router, prefix="/api")
+app.include_router(logs_router, prefix="/api")
 
 
 # Debug endpoint — shows ALL Docker containers and volumes (no auth required)

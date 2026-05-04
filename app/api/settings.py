@@ -26,6 +26,7 @@ async def get_settings_info(request: Request):
             "email": notif["email"]["enabled"],
             "telegram": notif["telegram"]["enabled"],
             "webhook": notif["webhook"]["enabled"],
+            "apprise": notif["apprise"]["enabled"],
         }
     }
 
@@ -47,6 +48,7 @@ async def get_settings_info(request: Request):
                     <span class="status-badge" style="background: { 'rgba(34, 197, 94, 0.2)' if info['NOTIFICATIONS']['telegram'] else 'rgba(148, 163, 184, 0.2)' }; color: { '#4ade80' if info['NOTIFICATIONS']['telegram'] else '#94a3b8' };">Telegram</span>
                     <span class="status-badge" style="background: { 'rgba(34, 197, 94, 0.2)' if info['NOTIFICATIONS']['slack'] else 'rgba(148, 163, 184, 0.2)' }; color: { '#4ade80' if info['NOTIFICATIONS']['slack'] else '#94a3b8' };">Slack</span>
                     <span class="status-badge" style="background: { 'rgba(34, 197, 94, 0.2)' if info['NOTIFICATIONS']['webhook'] else 'rgba(148, 163, 184, 0.2)' }; color: { '#4ade80' if info['NOTIFICATIONS']['webhook'] else '#94a3b8' };">Webhook</span>
+                    <span class="status-badge" style="background: { 'rgba(34, 197, 94, 0.2)' if info['NOTIFICATIONS']['apprise'] else 'rgba(148, 163, 184, 0.2)' }; color: { '#4ade80' if info['NOTIFICATIONS']['apprise'] else '#94a3b8' };">Apprise</span>
                 </div>
             </div>
         </div>
@@ -321,6 +323,29 @@ async def test_notification(request: Request):
                     return {"status": "ok", "message": f"Webhook responded with {resp.status_code}"}
             except Exception as e:
                 return {"status": "error", "message": f"Webhook failed: {str(e)}"}
+
+        elif channel == "apprise":
+            try:
+                import apprise
+                apobj = apprise.Apprise()
+                urls = config.get("urls", "")
+                added = False
+                for url in urls.split(","):
+                    url = url.strip()
+                    if url:
+                        apobj.add(url)
+                        added = True
+                
+                if not added:
+                    return {"status": "error", "message": "No valid Apprise URLs provided."}
+
+                await apobj.async_notify(
+                    body=test_message,
+                    title="Backtainer — Test Notification",
+                )
+                return {"status": "ok", "message": "Test Apprise notification sent!"}
+            except Exception as e:
+                return {"status": "error", "message": f"Apprise failed: {str(e)}"}
 
         return {"status": "error", "message": f"Unknown channel: {channel}"}
 

@@ -90,6 +90,9 @@ class Settings(BaseSettings):
     # Notifications — Generic Webhook
     NOTIFY_WEBHOOK_URL: Optional[str] = None
 
+    # Notifications — Apprise
+    NOTIFY_APPRISE_URLS: Optional[str] = None
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     def get_effective_storage_backend(self) -> str:
@@ -162,6 +165,10 @@ class Settings(BaseSettings):
             "webhook": {
                 "enabled": bool(self.NOTIFY_WEBHOOK_URL),
                 "url": self.NOTIFY_WEBHOOK_URL or "",
+            },
+            "apprise": {
+                "enabled": bool(self.NOTIFY_APPRISE_URLS),
+                "urls": self.NOTIFY_APPRISE_URLS or "",
             },
         }
 

@@ -308,6 +308,12 @@ async function loadNotificationConfig() {
             setVal('webhook-url', data.webhook.url);
             updateChannelState('webhook');
         }
+        // Apprise
+        if (data.apprise) {
+            document.getElementById('notif-apprise-enabled').checked = data.apprise.enabled;
+            setVal('apprise-urls', data.apprise.urls);
+            updateChannelState('apprise');
+        }
     } catch (e) {
         console.error('Failed to load notification config:', e);
     }
@@ -337,6 +343,10 @@ function getNotificationPayload() {
         webhook: {
             enabled: document.getElementById('notif-webhook-enabled')?.checked || false,
             url: getVal('webhook-url'),
+        },
+        apprise: {
+            enabled: document.getElementById('notif-apprise-enabled')?.checked || false,
+            urls: getVal('apprise-urls'),
         },
     };
 }

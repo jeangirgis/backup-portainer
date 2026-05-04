@@ -57,9 +57,16 @@ class RestoreEngine:
             with open(manifest_path, "r") as f:
                 manifest = json.load(f)
 
-            stack_name = manifest.get("stack", {}).get("name", "unknown")
+            stack_data = manifest.get("stack", {})
+            stack_name = stack_data.get("name", "unknown")
             results["stack_name"] = stack_name
             volumes_base = manifest_path.parent / "volumes"
+
+            # 2.5 Update stack definition in Portainer (if available)
+            logger.info(f"  Updating stack definition in Portainer...")
+            update_msg = self._update_portainer_stack(stack_data, temp_dir)
+            results["details"].append(update_msg)
+            logger.info(f"    {update_msg}")
 
             volume_list = manifest.get("volumes", [])
             results["volumes_found"] = len(volume_list)
@@ -139,6 +146,51 @@ class RestoreEngine:
             return results
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def _update_portainer_stack(self, stack_data: dict, temp_dir: Path) -> str:
+        """Update the stack's compose file in Portainer using the API."""
+        stack_id = stack_data.get("Id")
+        endpoint_id = stack_data.get("EndpointId")
+        
+        if not stack_id or not endpoint_id:
+            return "Missing stack ID or endpoint ID in backup manifest. Skipped Portainer update."
+            
+        stack_dir = temp_dir / "stack"
+        compose_file = stack_dir / "docker-compose.yml"
+        env_file = stack_dir / "stack.env"
+        
+        if not compose_file.exists():
+            return "No docker-compose.yml found in backup. Skipped Portainer update."
+            
+        compose_content = compose_file.read_text(encoding="utf-8")
+        env_vars = []
+        if env_file.exists():
+            for line in env_file.read_text(encoding="utf-8").splitlines():
+                if "=" in line:
+                    k, v = line.split("=", 1)
+                    env_vars.append({"name": k.strip(), "value": v.strip()})
+                    
+        import requests
+        url = f"{self.settings.PORTAINER_URL.rstrip('/')}/api/stacks/{stack_id}?endpointId={endpoint_id}"
+        try:
+            resp = requests.put(
+                url,
+                headers={"X-API-Key": self.settings.PORTAINER_API_TOKEN},
+                json={
+                    "stackFileContent": compose_content,
+                    "env": env_vars,
+                    "prune": True,
+                    "pullImage": False
+                },
+                verify=(self.settings.PORTAINER_SSL_VERIFY.lower() == "true"),
+                timeout=30.0
+            )
+            if resp.status_code == 404:
+                return f"Stack {stack_id} no longer exists in Portainer. Could not update definition."
+            resp.raise_for_status()
+            return f"Portainer stack definition updated successfully."
+        except Exception as e:
+            return f"Failed to update Portainer stack definition: {e}"
 
     def _stop_stack_containers(self, stack_name: str) -> list:
         """Stop all containers belonging to a stack. Returns list of stopped container IDs."""

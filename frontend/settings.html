@@ -16,6 +16,7 @@
                 <a href="index.html">Dashboard</a>
                 <a href="backups.html">History</a>
                 <a href="schedules.html">Schedules</a>
+                <a href="logs.html">Logs</a>
                 <a href="settings.html" class="active">Settings</a>
             </nav>
         </header>
@@ -339,6 +340,28 @@
                                 <button class="test-btn" onclick="testNotification('webhook')">📤 Send Test</button>
                             </div>
                             <div id="webhook-test-result"></div>
+                        </div>
+                    </div>
+
+                    <!-- APPRISE -->
+                    <div class="notif-channel" id="channel-apprise">
+                        <div class="notif-channel-header" onclick="toggleChannel('apprise')">
+                            <span class="notif-channel-title">🚀 Apprise (Universal)</span>
+                            <label class="toggle-switch" onclick="event.stopPropagation()">
+                                <input type="checkbox" id="notif-apprise-enabled" onchange="updateChannelState('apprise')">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="notif-channel-body">
+                            <div class="form-group">
+                                <label class="form-label">Apprise URLs</label>
+                                <textarea class="form-input" id="apprise-urls" rows="3" placeholder="discord://webhook_id/webhook_token&#10;mailto://user:pass@gmail.com"></textarea>
+                                <p class="form-hint">Enter Apprise URLs separated by commas or newlines. Supports 90+ services like Discord, Matrix, Gotify, Pushbullet, etc.</p>
+                            </div>
+                            <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
+                                <button class="test-btn" onclick="testNotification('apprise')">📤 Send Test</button>
+                            </div>
+                            <div id="apprise-test-result"></div>
                         </div>
                     </div>
 

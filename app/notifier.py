@@ -47,6 +47,11 @@ class Notifier:
         if webhook_cfg.get("enabled") and webhook_cfg.get("url"):
             await self._send_webhook(job, webhook_cfg["url"])
 
+        # Apprise
+        apprise_cfg = config.get("apprise", {})
+        if apprise_cfg.get("enabled") and apprise_cfg.get("urls"):
+            await self._send_apprise(message, apprise_cfg["urls"])
+
     async def _send_slack(self, message: str, webhook_url: str):
         try:
             async with httpx.AsyncClient() as client:
@@ -127,6 +132,24 @@ class Notifier:
             logger.info("Webhook notification sent")
         except Exception as e:
             logger.error(f"Failed to send generic webhook: {e}")
+
+    async def _send_apprise(self, message: str, urls: str):
+        try:
+            import apprise
+            apobj = apprise.Apprise()
+            for url in urls.split(","):
+                url = url.strip()
+                if url:
+                    apobj.add(url)
+            
+            subject = message.splitlines()[0] if message.splitlines() else "Backtainer Notification"
+            await apobj.async_notify(
+                body=message,
+                title=f"Backtainer: {subject}",
+            )
+            logger.info("Apprise notification sent")
+        except Exception as e:
+            logger.error(f"Failed to send Apprise notification: {e}")
 
 # Singleton
 notifier = Notifier()
