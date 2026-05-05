@@ -193,7 +193,7 @@ class RestoreEngine:
                     create_msg = self._create_portainer_stack(stack_data, temp_dir)
                     results["details"].append(create_msg)
                     logger.info(f"    {create_msg}")
-                    portainer_started = "created" in create_msg.lower()
+                    portainer_started = "created" in create_msg.lower() or "deployed" in create_msg.lower()
 
             if not portainer_started and stopped_containers:
                 logger.info(f"  Falling back to direct container restart...")
@@ -378,7 +378,8 @@ class RestoreEngine:
 
     def _create_portainer_stack(self, stack_data: dict, temp_dir: Path) -> str:
         """Create a new stack in Portainer from the backup's compose file.
-        Used when the original stack was deleted."""
+        Used when the original stack was deleted.
+        Falls back to docker compose CLI if the Portainer API fails."""
         endpoint_id = stack_data.get("EndpointId")
         stack_name = stack_data.get("name", "restored-stack")
 
@@ -406,6 +407,7 @@ class RestoreEngine:
         headers = {"X-API-Key": self.settings.PORTAINER_API_TOKEN}
 
         create_url = f"{base_url}/api/stacks/create/standalone/string?endpointId={endpoint_id}"
+        portainer_error = None
         try:
             resp = requests.post(
                 create_url,
@@ -419,12 +421,83 @@ class RestoreEngine:
                 timeout=120.0
             )
             if resp.status_code == 409:
-                # Stack name already exists — try with a different name
                 return f"A stack named '{stack_name}' already exists. Please remove it first or rename."
-            resp.raise_for_status()
-            return f"Stack '{stack_name}' created and started in Portainer."
+            if resp.status_code >= 400:
+                # Capture full error body for debugging
+                try:
+                    err_body = resp.json()
+                    err_detail = err_body.get("message") or err_body.get("details") or str(err_body)
+                except Exception:
+                    err_detail = resp.text[:500]
+                portainer_error = f"Portainer API {resp.status_code}: {err_detail}"
+                logger.error(f"  Portainer stack create failed: {portainer_error}")
+            else:
+                return f"Stack '{stack_name}' created and started in Portainer."
         except Exception as e:
-            return f"Failed to create stack in Portainer: {e}"
+            portainer_error = str(e)
+            logger.error(f"  Portainer stack create request failed: {e}")
+
+        # --- Fallback: deploy using docker compose CLI ---
+        logger.info(f"  Falling back to docker compose CLI for stack '{stack_name}'...")
+        cli_result = self._deploy_via_docker_compose(stack_name, stack_dir)
+        if cli_result.startswith("Stack '"):
+            return cli_result
+        # Both methods failed — return combined info
+        return f"Failed to create stack via Portainer ({portainer_error}). Docker Compose fallback: {cli_result}"
+
+    def _deploy_via_docker_compose(self, stack_name: str, stack_dir: Path) -> str:
+        """Deploy a stack using the docker compose CLI as a fallback."""
+        import subprocess
+        import os
+
+        compose_file = stack_dir / "docker-compose.yml"
+        if not compose_file.exists():
+            return "No docker-compose.yml found."
+
+        env_file = stack_dir / "stack.env"
+        env = dict(os.environ)
+        # Load env vars from stack.env into the subprocess environment
+        if env_file.exists():
+            for line in env_file.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line and "=" in line and not line.startswith("#"):
+                    k, v = line.split("=", 1)
+                    env[k.strip()] = v.strip()
+
+        # Try 'docker compose' (v2 plugin) first, then 'docker-compose' (legacy)
+        for cmd_base in [["docker", "compose"], ["docker-compose"]]:
+            cmd = cmd_base + [
+                "-f", str(compose_file),
+                "-p", stack_name,
+                "up", "-d", "--remove-orphans"
+            ]
+            try:
+                logger.info(f"    Running: {' '.join(cmd)}")
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    env=env,
+                    cwd=str(stack_dir),
+                )
+                if result.returncode == 0:
+                    logger.info(f"    docker compose succeeded: {result.stdout[-300:]}")
+                    return f"Stack '{stack_name}' deployed via docker compose CLI."
+                else:
+                    err = result.stderr[-500:] if result.stderr else result.stdout[-500:]
+                    logger.warning(f"    docker compose failed (rc={result.returncode}): {err}")
+                    # Continue to try the next command variant
+            except FileNotFoundError:
+                logger.info(f"    {cmd_base[0]} {'compose' if len(cmd_base) > 1 else ''} not found, trying next...")
+                continue
+            except subprocess.TimeoutExpired:
+                return "docker compose timed out after 120s."
+            except Exception as e:
+                logger.error(f"    docker compose error: {e}")
+                return f"docker compose error: {e}"
+
+        return "docker compose CLI not available on this system."
 
     def _ensure_compose_networks(self, stack_name: str, temp_dir: Path) -> str:
         """Parse compose file and create any missing Docker networks before stack deployment."""
