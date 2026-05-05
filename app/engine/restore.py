@@ -160,6 +160,11 @@ class RestoreEngine:
                 # If the stack was deleted (404), recreate it from backup
                 if not portainer_started and "not found" in start_msg.lower():
                     logger.info(f"  Stack was deleted — recreating from backup...")
+                    # Ensure Docker networks from compose file exist before creating the stack
+                    net_msg = self._ensure_compose_networks(stack_name, temp_dir)
+                    if net_msg:
+                        results["details"].append(net_msg)
+                        logger.info(f"    {net_msg}")
                     create_msg = self._create_portainer_stack(stack_data, temp_dir)
                     results["details"].append(create_msg)
                     logger.info(f"    {create_msg}")
@@ -391,6 +396,76 @@ class RestoreEngine:
             return f"Stack '{stack_name}' created and started in Portainer."
         except Exception as e:
             return f"Failed to create stack in Portainer: {e}"
+
+    def _ensure_compose_networks(self, stack_name: str, temp_dir: Path) -> str:
+        """Parse compose file and create any missing Docker networks before stack deployment."""
+        compose_file = temp_dir / "stack" / "docker-compose.yml"
+        if not compose_file.exists():
+            return None
+
+        try:
+            import yaml
+            with open(compose_file, "r", encoding="utf-8") as f:
+                compose = yaml.safe_load(f)
+
+            if not compose or not isinstance(compose, dict):
+                return None
+
+            networks_section = compose.get("networks", {})
+            if not networks_section:
+                # No explicit networks defined — docker-compose will create a default one
+                # Create it manually to be safe
+                default_net = f"{stack_name.lower()}_default"
+                try:
+                    self.docker_client.networks.get(default_net)
+                    logger.info(f"  Default network '{default_net}' already exists")
+                except docker.errors.NotFound:
+                    self.docker_client.networks.create(default_net, driver="bridge")
+                    logger.info(f"  Created default network: {default_net}")
+                return f"Ensured default network: {default_net}"
+
+            created = []
+            for net_name, net_config in networks_section.items():
+                net_config = net_config or {}
+
+                # Determine the actual Docker network name
+                if isinstance(net_config, dict) and net_config.get("name"):
+                    docker_net_name = net_config["name"]
+                else:
+                    docker_net_name = f"{stack_name.lower()}_{net_name}"
+
+                # External networks use the network name directly
+                is_external = isinstance(net_config, dict) and net_config.get("external")
+                if is_external:
+                    if isinstance(net_config.get("external"), dict) and net_config["external"].get("name"):
+                        docker_net_name = net_config["external"]["name"]
+                    elif isinstance(net_config, dict) and net_config.get("name"):
+                        docker_net_name = net_config["name"]
+                    else:
+                        docker_net_name = net_name
+
+                driver = "bridge"
+                if isinstance(net_config, dict) and net_config.get("driver"):
+                    driver = net_config["driver"]
+
+                try:
+                    self.docker_client.networks.get(docker_net_name)
+                    logger.info(f"  Network '{docker_net_name}' already exists")
+                except docker.errors.NotFound:
+                    try:
+                        self.docker_client.networks.create(docker_net_name, driver=driver)
+                        created.append(docker_net_name)
+                        logger.info(f"  Created network: {docker_net_name} (driver={driver})")
+                    except Exception as e:
+                        logger.error(f"  Failed to create network '{docker_net_name}': {e}")
+
+            if created:
+                return f"Created {len(created)} network(s): {', '.join(created)}"
+            return "All networks already exist."
+
+        except Exception as e:
+            logger.error(f"  Failed to ensure networks: {e}", exc_info=True)
+            return f"Failed to ensure networks: {e}"
 
     def _stop_stack_containers(self, stack_name: str) -> list:
         """Stop all containers belonging to a stack. Returns list of stopped container IDs."""
