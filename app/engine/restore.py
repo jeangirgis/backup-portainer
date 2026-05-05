@@ -58,7 +58,7 @@ class RestoreEngine:
                 manifest = json.load(f)
 
             stack_data = manifest.get("stack", {})
-            stack_name = stack_data.get("name", "unknown")
+            stack_name = stack_data.get("name") or stack_data.get("Name") or "unknown"
             results["stack_name"] = stack_name
             volumes_base = manifest_path.parent / "volumes"
 
@@ -70,8 +70,18 @@ class RestoreEngine:
                 results["status"] = "empty"
                 return results
 
-            stack_id = stack_data.get("Id")
+            # Read stack ID and endpoint ID (handle both old and new manifest formats)
+            stack_id = stack_data.get("Id") or stack_data.get("id")
             endpoint_id = stack_data.get("EndpointId")
+
+            # For old backups that don't have EndpointId, look it up from Portainer
+            if stack_id and not endpoint_id:
+                endpoint_id = self._lookup_endpoint_id(stack_id)
+            # If still no endpoint ID, try to get the default endpoint
+            if not endpoint_id:
+                endpoint_id = self._get_default_endpoint_id()
+
+            logger.info(f"  Resolved: stack_id={stack_id}, endpoint_id={endpoint_id}, stack_name={stack_name}")
 
             # 3. STOP the stack
             # Use Portainer API first (keeps Portainer state in sync),
@@ -179,6 +189,51 @@ class RestoreEngine:
             return results
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def _lookup_endpoint_id(self, stack_id) -> int:
+        """Look up EndpointId for a stack from Portainer API."""
+        import requests
+        base_url = self.settings.PORTAINER_URL.rstrip('/')
+        verify_ssl = self.settings.PORTAINER_SSL_VERIFY.lower() == "true"
+        headers = {"X-API-Key": self.settings.PORTAINER_API_TOKEN}
+        try:
+            resp = requests.get(
+                f"{base_url}/api/stacks/{stack_id}",
+                headers=headers,
+                verify=verify_ssl,
+                timeout=10.0
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                eid = data.get("EndpointId")
+                logger.info(f"  Looked up EndpointId={eid} for stack {stack_id}")
+                return eid
+        except Exception as e:
+            logger.warning(f"  Failed to look up EndpointId: {e}")
+        return None
+
+    def _get_default_endpoint_id(self) -> int:
+        """Get the first available endpoint ID from Portainer."""
+        import requests
+        base_url = self.settings.PORTAINER_URL.rstrip('/')
+        verify_ssl = self.settings.PORTAINER_SSL_VERIFY.lower() == "true"
+        headers = {"X-API-Key": self.settings.PORTAINER_API_TOKEN}
+        try:
+            resp = requests.get(
+                f"{base_url}/api/endpoints",
+                headers=headers,
+                verify=verify_ssl,
+                timeout=10.0
+            )
+            if resp.status_code == 200:
+                endpoints = resp.json()
+                if endpoints:
+                    eid = endpoints[0].get("Id")
+                    logger.info(f"  Using default EndpointId={eid}")
+                    return eid
+        except Exception as e:
+            logger.warning(f"  Failed to get default endpoint: {e}")
+        return None
 
     def _stop_portainer_stack(self, stack_id, endpoint_id) -> str:
         """Stop a stack via the Portainer API."""

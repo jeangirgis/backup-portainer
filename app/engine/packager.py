@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class Packager:
-    def __init__(self, app_version: str = "2.0.0"):
+    def __init__(self, app_version: str = "2.2.0"):
         self.app_version = app_version
 
     def _calculate_sha256(self, file_path: Path) -> str:
@@ -28,12 +28,16 @@ class Packager:
 
         # 1. Generate manifest.json
         manifest = {
-            "version": "2.0",
+            "version": "2.1",
             "app_version": self.app_version,
             "created_at": datetime.utcnow().isoformat() + "Z",
             "stack": {
-                "id": str(stack_data.get("Id")),
+                "id": str(stack_data.get("Id", "")),
+                "Id": stack_data.get("Id"),
                 "name": stack_name,
+                "Name": stack_name,
+                "EndpointId": stack_data.get("EndpointId"),
+                "Type": stack_data.get("Type"),
             },
             "volumes": volumes,
             "checksums": {},
