@@ -169,23 +169,45 @@ class RestoreEngine:
             _progress("start", "running", "Starting stack...")
             logger.info(f"  Starting stack '{stack_name}'...")
             portainer_started = False
+
+            # Resolve the correct stack ID — the backup's ID may be stale
+            live_stack_id = stack_id
+            live_endpoint_id = endpoint_id
+
             if stack_id and endpoint_id:
-                # First try to update the definition (if stack still exists)
+                # Check if the backup's stack ID still exists in Portainer
                 update_msg = self._update_portainer_stack_definition(stack_data, temp_dir)
                 results["details"].append(update_msg)
                 logger.info(f"    {update_msg}")
 
-                # Then try to start
-                start_msg = self._start_portainer_stack(stack_id, endpoint_id)
+                if "not found" in update_msg.lower():
+                    # Stack ID from backup is gone — try to find it by name
+                    logger.info(f"  Stack ID {stack_id} is stale, looking up by name '{stack_name}'...")
+                    found = self._lookup_stack_by_name(stack_name)
+                    if found:
+                        live_stack_id = found["Id"]
+                        live_endpoint_id = found.get("EndpointId", endpoint_id)
+                        logger.info(f"  Found stack '{stack_name}' with ID {live_stack_id}")
+                        results["details"].append(f"Resolved stack '{stack_name}' → ID {live_stack_id}")
+                        # Update the definition on the found stack
+                        stack_data_copy = dict(stack_data)
+                        stack_data_copy["Id"] = live_stack_id
+                        stack_data_copy["EndpointId"] = live_endpoint_id
+                        upd = self._update_portainer_stack_definition(stack_data_copy, temp_dir)
+                        results["details"].append(upd)
+                        logger.info(f"    {upd}")
+
+            if live_stack_id and live_endpoint_id:
+                # Try to start the stack
+                start_msg = self._start_portainer_stack(live_stack_id, live_endpoint_id)
                 results["details"].append(start_msg)
                 logger.info(f"    {start_msg}")
                 portainer_started = "started" in start_msg.lower()
 
-                # If the stack was deleted (404), recreate it from backup
+                # If the stack truly doesn't exist anywhere, recreate from backup
                 if not portainer_started and "not found" in start_msg.lower():
                     _progress("start", "running", "Recreating deleted stack...")
                     logger.info(f"  Stack was deleted — recreating from backup...")
-                    # Ensure Docker networks from compose file exist before creating the stack
                     net_msg = self._ensure_compose_networks(stack_name, temp_dir)
                     if net_msg:
                         results["details"].append(net_msg)
@@ -199,6 +221,11 @@ class RestoreEngine:
                 logger.info(f"  Falling back to direct container restart...")
                 restarted = self._start_containers(stopped_containers)
                 results["details"].append(f"Restarted {restarted} containers via Docker")
+                # Reconnect containers to their compose networks
+                net_msg = self._reconnect_container_networks(stack_name, stopped_containers, temp_dir)
+                if net_msg:
+                    results["details"].append(net_msg)
+                    logger.info(f"    {net_msg}")
 
             _progress("start", "done", "Stack started")
 
@@ -272,6 +299,28 @@ class RestoreEngine:
                     return eid
         except Exception as e:
             logger.warning(f"  Failed to get default endpoint: {e}")
+        return None
+
+    def _lookup_stack_by_name(self, stack_name: str) -> dict:
+        """Find a stack by name in Portainer. Returns the stack dict or None."""
+        import requests
+        base_url = self.settings.PORTAINER_URL.rstrip('/')
+        verify_ssl = self.settings.PORTAINER_SSL_VERIFY.lower() == "true"
+        headers = {"X-API-Key": self.settings.PORTAINER_API_TOKEN}
+        try:
+            resp = requests.get(
+                f"{base_url}/api/stacks",
+                headers=headers,
+                verify=verify_ssl,
+                timeout=10.0
+            )
+            if resp.status_code == 200:
+                stacks = resp.json()
+                for s in stacks:
+                    if s.get("Name") == stack_name:
+                        return s
+        except Exception as e:
+            logger.warning(f"  Failed to look up stack by name: {e}")
         return None
 
     def _stop_portainer_stack(self, stack_id, endpoint_id) -> str:
@@ -672,6 +721,88 @@ class RestoreEngine:
             except Exception as e:
                 logger.error(f"    Failed to start container {cid}: {e}")
         return started
+
+    def _reconnect_container_networks(self, stack_name: str, container_ids: list, temp_dir: Path) -> str:
+        """Reconnect containers to their networks using docker-compose config if available."""
+        compose_file = temp_dir / "stack" / "docker-compose.yml"
+        if not compose_file.exists():
+            return "No docker-compose.yml found, cannot reconnect networks."
+
+        try:
+            import yaml
+            with open(compose_file, "r", encoding="utf-8") as f:
+                compose = yaml.safe_load(f)
+
+            if not compose or not isinstance(compose, dict):
+                return "Invalid docker-compose.yml, cannot reconnect networks."
+
+            project_name = stack_name.lower()
+            networks_section = compose.get("networks", {})
+            services_section = compose.get("services", {})
+            
+            if not services_section:
+                return "No services defined in docker-compose.yml."
+
+            reconnected = 0
+            for cid in container_ids:
+                try:
+                    c = self.docker_client.containers.get(cid)
+                    labels = c.labels
+                    service_name = labels.get("com.docker.compose.service")
+                    if not service_name:
+                        continue
+                        
+                    service_config = services_section.get(service_name, {})
+                    svc_networks = service_config.get("networks")
+                    
+                    nets_to_connect = []
+                    if isinstance(svc_networks, list):
+                        nets_to_connect = svc_networks
+                    elif isinstance(svc_networks, dict):
+                        nets_to_connect = list(svc_networks.keys())
+                    elif not svc_networks:
+                        nets_to_connect = ["default"]
+                        
+                    for net_name in nets_to_connect:
+                        net_config = networks_section.get(net_name, {}) if net_name != "default" else {}
+                        # Determine actual network name
+                        docker_net_name = f"{project_name}_{net_name}"
+                        is_external = isinstance(net_config, dict) and net_config.get("external")
+                        if is_external:
+                            if isinstance(net_config.get("external"), dict) and net_config["external"].get("name"):
+                                docker_net_name = net_config["external"]["name"]
+                            elif isinstance(net_config, dict) and net_config.get("name"):
+                                docker_net_name = net_config["name"]
+                            else:
+                                docker_net_name = net_name
+                        elif isinstance(net_config, dict) and net_config.get("name"):
+                            docker_net_name = net_config["name"]
+                            
+                        # Connect container to network
+                        try:
+                            net = self.docker_client.networks.get(docker_net_name)
+                            # Only connect if not already connected
+                            net.reload()
+                            # check if container's ID is in the network's container list
+                            connected_cids = [cont.id for cont in net.containers]
+                            if c.id not in connected_cids:
+                                net.connect(c)
+                                logger.info(f"    Reconnected {c.name} to network {docker_net_name}")
+                                reconnected += 1
+                        except docker.errors.NotFound:
+                            logger.warning(f"    Network {docker_net_name} not found for {c.name}")
+                        except docker.errors.APIError as e:
+                            if "already exists" not in str(e).lower() and "already connected" not in str(e).lower():
+                                logger.warning(f"    Failed to connect {c.name} to {docker_net_name}: {e}")
+                except Exception as e:
+                    logger.error(f"    Failed to reconnect networks for container {cid}: {e}")
+                    
+            if reconnected > 0:
+                return f"Reconnected {reconnected} container-network endpoints"
+            return "No networks needed reconnection"
+        except Exception as e:
+            logger.error(f"  Failed to reconnect networks: {e}", exc_info=True)
+            return f"Failed to reconnect networks: {e}"
 
     def _ensure_alpine(self):
         try:
