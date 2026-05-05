@@ -500,7 +500,12 @@ class RestoreEngine:
         return "docker compose CLI not available on this system."
 
     def _ensure_compose_networks(self, stack_name: str, temp_dir: Path) -> str:
-        """Parse compose file and create any missing Docker networks before stack deployment."""
+        """Parse compose file and ensure Docker networks are ready for stack deployment.
+        
+        If a network exists with incorrect compose labels, it is removed so that
+        docker-compose / Portainer can recreate it with the correct metadata.
+        If a network doesn't exist, it is created with proper compose labels.
+        """
         compose_file = temp_dir / "stack" / "docker-compose.yml"
         if not compose_file.exists():
             return None
@@ -513,20 +518,17 @@ class RestoreEngine:
             if not compose or not isinstance(compose, dict):
                 return None
 
+            project_name = stack_name.lower()
             networks_section = compose.get("networks", {})
+
             if not networks_section:
-                # No explicit networks defined — docker-compose will create a default one
-                # Create it manually to be safe
-                default_net = f"{stack_name.lower()}_default"
-                try:
-                    self.docker_client.networks.get(default_net)
-                    logger.info(f"  Default network '{default_net}' already exists")
-                except docker.errors.NotFound:
-                    self.docker_client.networks.create(default_net, driver="bridge")
-                    logger.info(f"  Created default network: {default_net}")
+                # No explicit networks — handle the default network
+                default_net = f"{project_name}_default"
+                self._ensure_single_network(default_net, "default", project_name, "bridge")
                 return f"Ensured default network: {default_net}"
 
             created = []
+            cleaned = []
             for net_name, net_config in networks_section.items():
                 net_config = net_config or {}
 
@@ -534,7 +536,7 @@ class RestoreEngine:
                 if isinstance(net_config, dict) and net_config.get("name"):
                     docker_net_name = net_config["name"]
                 else:
-                    docker_net_name = f"{stack_name.lower()}_{net_name}"
+                    docker_net_name = f"{project_name}_{net_name}"
 
                 # External networks use the network name directly
                 is_external = isinstance(net_config, dict) and net_config.get("external")
@@ -545,29 +547,90 @@ class RestoreEngine:
                         docker_net_name = net_config["name"]
                     else:
                         docker_net_name = net_name
+                    # Don't touch external networks — they are managed externally
+                    continue
 
                 driver = "bridge"
                 if isinstance(net_config, dict) and net_config.get("driver"):
                     driver = net_config["driver"]
 
-                try:
-                    self.docker_client.networks.get(docker_net_name)
-                    logger.info(f"  Network '{docker_net_name}' already exists")
-                except docker.errors.NotFound:
-                    try:
-                        self.docker_client.networks.create(docker_net_name, driver=driver)
-                        created.append(docker_net_name)
-                        logger.info(f"  Created network: {docker_net_name} (driver={driver})")
-                    except Exception as e:
-                        logger.error(f"  Failed to create network '{docker_net_name}': {e}")
+                action = self._ensure_single_network(docker_net_name, net_name, project_name, driver)
+                if action == "created":
+                    created.append(docker_net_name)
+                elif action == "cleaned":
+                    cleaned.append(docker_net_name)
 
+            parts = []
+            if cleaned:
+                parts.append(f"Cleaned {len(cleaned)} network(s) with wrong labels: {', '.join(cleaned)}")
             if created:
-                return f"Created {len(created)} network(s): {', '.join(created)}"
-            return "All networks already exist."
+                parts.append(f"Created {len(created)} network(s): {', '.join(created)}")
+            if not parts:
+                return "All networks ready."
+            return ". ".join(parts)
 
         except Exception as e:
             logger.error(f"  Failed to ensure networks: {e}", exc_info=True)
             return f"Failed to ensure networks: {e}"
+
+    def _ensure_single_network(self, docker_net_name: str, compose_net_name: str,
+                                project_name: str, driver: str) -> str:
+        """Ensure a single Docker network is ready for compose deployment.
+        Returns: 'exists', 'created', or 'cleaned'."""
+        expected_labels = {
+            "com.docker.compose.network": compose_net_name,
+            "com.docker.compose.project": project_name,
+        }
+
+        try:
+            net = self.docker_client.networks.get(docker_net_name)
+            labels = net.attrs.get("Labels") or {}
+            actual_compose_label = labels.get("com.docker.compose.network", "")
+
+            if actual_compose_label == compose_net_name:
+                logger.info(f"  Network '{docker_net_name}' exists with correct labels")
+                return "exists"
+
+            # Labels are wrong — remove so compose can recreate it correctly
+            logger.info(f"  Network '{docker_net_name}' has wrong compose label "
+                        f"('{actual_compose_label}' != '{compose_net_name}'), removing...")
+            try:
+                net.remove()
+                logger.info(f"  Removed network '{docker_net_name}'")
+                return "cleaned"
+            except Exception as e:
+                # Network might have connected containers — disconnect them first
+                logger.warning(f"  Could not remove network '{docker_net_name}': {e}")
+                try:
+                    # Force disconnect any remaining containers
+                    net.reload()
+                    for container_info in (net.attrs.get("Containers") or {}).values():
+                        cname = container_info.get("Name", "unknown")
+                        try:
+                            net.disconnect(cname, force=True)
+                            logger.info(f"    Disconnected '{cname}' from '{docker_net_name}'")
+                        except Exception:
+                            pass
+                    net.remove()
+                    logger.info(f"  Removed network '{docker_net_name}' after disconnecting containers")
+                    return "cleaned"
+                except Exception as e2:
+                    logger.error(f"  Failed to remove network '{docker_net_name}': {e2}")
+                    return "exists"
+
+        except docker.errors.NotFound:
+            # Network doesn't exist — create it with proper compose labels
+            try:
+                self.docker_client.networks.create(
+                    docker_net_name,
+                    driver=driver,
+                    labels=expected_labels
+                )
+                logger.info(f"  Created network: {docker_net_name} (driver={driver}, labels={expected_labels})")
+                return "created"
+            except Exception as e:
+                logger.error(f"  Failed to create network '{docker_net_name}': {e}")
+                return "exists"
 
     def _stop_stack_containers(self, stack_name: str) -> list:
         """Stop all containers belonging to a stack. Returns list of stopped container IDs."""
