@@ -127,21 +127,28 @@ class RestoreEngine:
                     logger.error(f"  {msg}", exc_info=True)
                     results["details"].append(msg)
 
-            # 6. UPDATE stack definition in Portainer (if compose file available)
+            # 6. RESTART the stack via Portainer
+            logger.info(f"  Starting stack '{stack_name}'...")
+            portainer_started = False
             if stack_id and endpoint_id:
+                # First try to update the definition (if stack still exists)
                 update_msg = self._update_portainer_stack_definition(stack_data, temp_dir)
                 results["details"].append(update_msg)
                 logger.info(f"    {update_msg}")
 
-            # 7. START the stack
-            # Use Portainer API first, fall back to Docker direct
-            logger.info(f"  Starting stack '{stack_name}'...")
-            portainer_started = False
-            if stack_id and endpoint_id:
+                # Then try to start
                 start_msg = self._start_portainer_stack(stack_id, endpoint_id)
                 results["details"].append(start_msg)
                 logger.info(f"    {start_msg}")
                 portainer_started = "started" in start_msg.lower()
+
+                # If the stack was deleted (404), recreate it from backup
+                if not portainer_started and "not found" in start_msg.lower():
+                    logger.info(f"  Stack was deleted — recreating from backup...")
+                    create_msg = self._create_portainer_stack(stack_data, temp_dir)
+                    results["details"].append(create_msg)
+                    logger.info(f"    {create_msg}")
+                    portainer_started = "created" in create_msg.lower()
 
             if not portainer_started and stopped_containers:
                 logger.info(f"  Falling back to direct container restart...")
@@ -274,6 +281,56 @@ class RestoreEngine:
             return "Stack started via Portainer."
         except Exception as e:
             return f"Failed to start stack via Portainer: {e}"
+
+    def _create_portainer_stack(self, stack_data: dict, temp_dir: Path) -> str:
+        """Create a new stack in Portainer from the backup's compose file.
+        Used when the original stack was deleted."""
+        endpoint_id = stack_data.get("EndpointId")
+        stack_name = stack_data.get("name", "restored-stack")
+
+        if not endpoint_id:
+            return "Missing endpoint ID in backup manifest. Cannot create stack."
+
+        stack_dir = temp_dir / "stack"
+        compose_file = stack_dir / "docker-compose.yml"
+
+        if not compose_file.exists():
+            return "No docker-compose.yml found in backup. Cannot create stack."
+
+        compose_content = compose_file.read_text(encoding="utf-8")
+        env_vars = []
+        env_file = stack_dir / "stack.env"
+        if env_file.exists():
+            for line in env_file.read_text(encoding="utf-8").splitlines():
+                if "=" in line:
+                    k, v = line.split("=", 1)
+                    env_vars.append({"name": k.strip(), "value": v.strip()})
+
+        import requests
+        base_url = self.settings.PORTAINER_URL.rstrip('/')
+        verify_ssl = self.settings.PORTAINER_SSL_VERIFY.lower() == "true"
+        headers = {"X-API-Key": self.settings.PORTAINER_API_TOKEN}
+
+        create_url = f"{base_url}/api/stacks/create/standalone/string?endpointId={endpoint_id}"
+        try:
+            resp = requests.post(
+                create_url,
+                headers=headers,
+                json={
+                    "Name": stack_name,
+                    "StackFileContent": compose_content,
+                    "Env": env_vars,
+                },
+                verify=verify_ssl,
+                timeout=120.0
+            )
+            if resp.status_code == 409:
+                # Stack name already exists — try with a different name
+                return f"A stack named '{stack_name}' already exists. Please remove it first or rename."
+            resp.raise_for_status()
+            return f"Stack '{stack_name}' created and started in Portainer."
+        except Exception as e:
+            return f"Failed to create stack in Portainer: {e}"
 
     def _stop_stack_containers(self, stack_name: str) -> list:
         """Stop all containers belonging to a stack. Returns list of stopped container IDs."""
