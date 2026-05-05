@@ -81,6 +81,11 @@ class RestoreEngine:
             if not endpoint_id:
                 endpoint_id = self._get_default_endpoint_id()
 
+            # Write resolved values back into stack_data so all helper methods can use them
+            stack_data["Id"] = stack_id
+            stack_data["EndpointId"] = endpoint_id
+            stack_data["name"] = stack_name
+
             logger.info(f"  Resolved: stack_id={stack_id}, endpoint_id={endpoint_id}, stack_name={stack_name}")
 
             # 3. STOP the stack
