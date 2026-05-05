@@ -70,15 +70,30 @@ class RestoreEngine:
                 results["status"] = "empty"
                 return results
 
-            # 3. STOP all containers belonging to this stack
-            logger.info(f"  Stopping stack '{stack_name}' containers...")
-            stopped_containers = self._stop_stack_containers(stack_name)
-            if stopped_containers:
-                results["details"].append(f"Stopped {len(stopped_containers)} containers")
-                # Give containers a moment to fully release file handles
-                time.sleep(2)
-            else:
-                results["details"].append("⚠️ No running containers found for this stack — restoring anyway")
+            stack_id = stack_data.get("Id")
+            endpoint_id = stack_data.get("EndpointId")
+
+            # 3. STOP the stack
+            # Use Portainer API first (keeps Portainer state in sync),
+            # fall back to Docker direct if Portainer API unavailable
+            logger.info(f"  Stopping stack '{stack_name}'...")
+            portainer_stopped = False
+            if stack_id and endpoint_id:
+                stop_msg = self._stop_portainer_stack(stack_id, endpoint_id)
+                results["details"].append(stop_msg)
+                logger.info(f"    {stop_msg}")
+                portainer_stopped = "stopped" in stop_msg.lower() or "already" in stop_msg.lower()
+
+            if not portainer_stopped:
+                # Fallback: stop containers directly via Docker
+                stopped_containers = self._stop_stack_containers(stack_name)
+                if stopped_containers:
+                    results["details"].append(f"Stopped {len(stopped_containers)} containers via Docker")
+                else:
+                    results["details"].append("⚠️ No running containers found for this stack — restoring anyway")
+
+            # Give containers a moment to fully release file handles
+            time.sleep(3)
 
             # 4. Ensure alpine
             self._ensure_alpine()
@@ -112,18 +127,22 @@ class RestoreEngine:
                     logger.error(f"  {msg}", exc_info=True)
                     results["details"].append(msg)
 
-            # 6. RESTART the stack
-            # First, try to redeploy via Portainer API (this handles both
-            # updating the compose definition AND starting all containers)
-            logger.info(f"  Redeploying stack via Portainer API...")
-            redeploy_msg = self._redeploy_portainer_stack(stack_data, temp_dir)
-            results["details"].append(redeploy_msg)
-            logger.info(f"    {redeploy_msg}")
+            # 6. UPDATE stack definition in Portainer (if compose file available)
+            if stack_id and endpoint_id:
+                update_msg = self._update_portainer_stack_definition(stack_data, temp_dir)
+                results["details"].append(update_msg)
+                logger.info(f"    {update_msg}")
 
-            portainer_started = "successfully" in redeploy_msg.lower()
+            # 7. START the stack
+            # Use Portainer API first, fall back to Docker direct
+            logger.info(f"  Starting stack '{stack_name}'...")
+            portainer_started = False
+            if stack_id and endpoint_id:
+                start_msg = self._start_portainer_stack(stack_id, endpoint_id)
+                results["details"].append(start_msg)
+                logger.info(f"    {start_msg}")
+                portainer_started = "started" in start_msg.lower()
 
-            # If Portainer redeploy didn't work, fall back to restarting
-            # the containers we stopped earlier via Docker directly
             if not portainer_started and stopped_containers:
                 logger.info(f"  Falling back to direct container restart...")
                 restarted = self._start_containers(stopped_containers)
@@ -143,31 +162,58 @@ class RestoreEngine:
         except Exception as e:
             logger.error(f"=== RESTORE FAILED: {e} ===", exc_info=True)
             results["error"] = str(e)
-            # Try to restart containers even if restore failed
-            if stopped_containers:
-                logger.info("  Restarting containers after failure...")
+            # Try to restart the stack even if restore failed
+            if stack_id and endpoint_id:
+                self._start_portainer_stack(stack_id, endpoint_id)
+                results["details"].append("Attempted stack restart after failure")
+            elif stopped_containers:
                 self._start_containers(stopped_containers)
                 results["details"].append("Containers restarted after failure")
             return results
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-    def _redeploy_portainer_stack(self, stack_data: dict, temp_dir: Path) -> str:
-        """Redeploy the stack via Portainer API: update compose definition + start containers."""
+    def _stop_portainer_stack(self, stack_id, endpoint_id) -> str:
+        """Stop a stack via the Portainer API."""
+        import requests
+        base_url = self.settings.PORTAINER_URL.rstrip('/')
+        verify_ssl = self.settings.PORTAINER_SSL_VERIFY.lower() == "true"
+        headers = {"X-API-Key": self.settings.PORTAINER_API_TOKEN}
+
+        stop_url = f"{base_url}/api/stacks/{stack_id}/stop?endpointId={endpoint_id}"
+        try:
+            resp = requests.post(
+                stop_url,
+                headers=headers,
+                verify=verify_ssl,
+                timeout=60.0
+            )
+            if resp.status_code == 400:
+                # Stack might already be stopped
+                body = resp.json() if resp.headers.get('content-type', '').startswith('application/json') else {}
+                detail = body.get("message", body.get("details", ""))
+                if "already" in detail.lower() or "inactive" in detail.lower() or "stopped" in detail.lower():
+                    return "Stack already stopped."
+                return f"Portainer stop returned 400: {detail or resp.text[:200]}"
+            if resp.status_code == 404:
+                return f"Stack {stack_id} not found in Portainer."
+            resp.raise_for_status()
+            return "Stack stopped via Portainer."
+        except Exception as e:
+            return f"Failed to stop stack via Portainer: {e}"
+
+    def _update_portainer_stack_definition(self, stack_data: dict, temp_dir: Path) -> str:
+        """Update the stack's compose file in Portainer (without starting it)."""
         stack_id = stack_data.get("Id")
         endpoint_id = stack_data.get("EndpointId")
-        
-        if not stack_id or not endpoint_id:
-            return "Missing stack ID or endpoint ID in backup manifest. Skipped Portainer redeploy."
-            
+
         stack_dir = temp_dir / "stack"
         compose_file = stack_dir / "docker-compose.yml"
         env_file = stack_dir / "stack.env"
-        
+
         if not compose_file.exists():
-            # Even without a compose file, try to start the existing stack
-            return self._start_portainer_stack(stack_id, endpoint_id)
-            
+            return "No docker-compose.yml found in backup. Skipped definition update."
+
         compose_content = compose_file.read_text(encoding="utf-8")
         env_vars = []
         if env_file.exists():
@@ -175,13 +221,12 @@ class RestoreEngine:
                 if "=" in line:
                     k, v = line.split("=", 1)
                     env_vars.append({"name": k.strip(), "value": v.strip()})
-                    
+
         import requests
         base_url = self.settings.PORTAINER_URL.rstrip('/')
         verify_ssl = self.settings.PORTAINER_SSL_VERIFY.lower() == "true"
         headers = {"X-API-Key": self.settings.PORTAINER_API_TOKEN}
 
-        # Step 1: Update the stack definition
         update_url = f"{base_url}/api/stacks/{stack_id}?endpointId={endpoint_id}"
         try:
             resp = requests.put(
@@ -197,14 +242,11 @@ class RestoreEngine:
                 timeout=30.0
             )
             if resp.status_code == 404:
-                return f"Stack {stack_id} no longer exists in Portainer. Could not redeploy."
+                return f"Stack {stack_id} not found. Skipped definition update."
             resp.raise_for_status()
-            logger.info(f"  Stack definition updated. Now starting stack...")
+            return "Stack definition updated in Portainer."
         except Exception as e:
-            logger.warning(f"  Stack definition update failed: {e}. Trying to start anyway...")
-
-        # Step 2: Start the stack (Portainer API)
-        return self._start_portainer_stack(stack_id, endpoint_id)
+            return f"Failed to update stack definition: {e}"
 
     def _start_portainer_stack(self, stack_id, endpoint_id) -> str:
         """Start a stack via the Portainer API."""
@@ -222,16 +264,14 @@ class RestoreEngine:
                 timeout=60.0
             )
             if resp.status_code == 400:
-                # Stack might already be running
                 body = resp.json() if resp.headers.get('content-type', '').startswith('application/json') else {}
                 detail = body.get("message", body.get("details", ""))
-                if "already running" in detail.lower() or "active" in detail.lower():
-                    return "Stack is already running — restarted successfully."
+                logger.warning(f"  Portainer start returned 400: {detail}")
                 return f"Portainer start returned 400: {detail or resp.text[:200]}"
             if resp.status_code == 404:
                 return f"Stack {stack_id} not found in Portainer. Could not start."
             resp.raise_for_status()
-            return "Stack redeployed and started successfully via Portainer."
+            return "Stack started via Portainer."
         except Exception as e:
             return f"Failed to start stack via Portainer: {e}"
 
