@@ -229,9 +229,23 @@ async def download_backup(job_id: str, db: AsyncSession = Depends(get_db)):
     
     file_path = Path(settings.LOCAL_BACKUP_DIR) / job.storage_path
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found on disk")
+        # For remote backends, download first
+        backend = settings.get_effective_storage_backend()
+        if backend != "local":
+            try:
+                driver = settings.get_storage_driver()
+                local_filename = f"{job.stack_name}_{job.created_at.strftime('%Y%m%d_%H%M%S')}.tar.gz"
+                file_path = Path(settings.LOCAL_BACKUP_DIR) / local_filename
+                logger.info(f"Downloading backup from {backend} for download endpoint")
+                await driver.download(job.storage_path, file_path)
+            except Exception as e:
+                logger.error(f"Failed to download from {backend}: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to download from {backend}: {e}")
+        else:
+            raise HTTPException(status_code=404, detail="File not found on disk")
     
-    return FileResponse(file_path, filename=job.storage_path)
+    download_name = f"{job.stack_name}_{job.created_at.strftime('%Y%m%d_%H%M%S')}.tar.gz"
+    return FileResponse(file_path, filename=download_name)
 
 
 @router.delete("/{job_id}")
@@ -263,12 +277,34 @@ async def restore_backup(job_id: str, db: AsyncSession = Depends(get_db)):
         """)
     
     file_path = Path(settings.LOCAL_BACKUP_DIR) / job.storage_path
+    downloaded_temp = False
+
     if not file_path.exists():
-        return HTMLResponse(content=f"""
-            <div class="toast toast-error">
-                <span>❌</span> Backup file not found: <code>{job.storage_path}</code>
-            </div>
-        """)
+        # For remote backends (gdrive, s3, sftp), the storage_path is a remote
+        # identifier (e.g. Google Drive file ID). Download it first.
+        backend = settings.get_effective_storage_backend()
+        if backend != "local":
+            try:
+                driver = settings.get_storage_driver()
+                # Use a descriptive local filename instead of the remote ID
+                local_filename = f"{job.stack_name}_{job.created_at.strftime('%Y%m%d_%H%M%S')}.tar.gz"
+                file_path = Path(settings.LOCAL_BACKUP_DIR) / local_filename
+                logger.info(f"Downloading backup from {backend} ({job.storage_path}) to {file_path}")
+                await driver.download(job.storage_path, file_path)
+                downloaded_temp = True
+            except Exception as e:
+                logger.error(f"Failed to download backup from {backend}: {e}")
+                return HTMLResponse(content=f"""
+                    <div class="toast toast-error">
+                        <span>❌</span> Failed to download backup from {backend}: {str(e)[:200]}
+                    </div>
+                """)
+        else:
+            return HTMLResponse(content=f"""
+                <div class="toast toast-error">
+                    <span>❌</span> Backup file not found: <code>{job.storage_path}</code>
+                </div>
+            """)
 
     # Run restore synchronously (it uses Docker SDK which is sync)
     import asyncio
@@ -281,6 +317,14 @@ async def restore_backup(job_id: str, db: AsyncSession = Depends(get_db)):
                 <span>❌</span> Restore crashed: {str(e)[:200]}
             </div>
         """)
+    finally:
+        # Clean up the downloaded temp file to save disk space
+        if downloaded_temp and file_path.exists():
+            try:
+                file_path.unlink()
+                logger.info(f"Cleaned up downloaded temp file: {file_path}")
+            except Exception:
+                pass
 
     # Build result HTML
     status = restore_result.get("status", "failed")
@@ -333,14 +377,33 @@ async def inspect_backup_endpoint(job_id: str, db: AsyncSession = Depends(get_db
         raise HTTPException(status_code=404, detail="Backup not found")
     
     file_path = Path(settings.LOCAL_BACKUP_DIR) / job.storage_path
+    downloaded_temp = False
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found on disk")
+        backend = settings.get_effective_storage_backend()
+        if backend != "local":
+            try:
+                driver = settings.get_storage_driver()
+                local_filename = f"{job.stack_name}_{job.created_at.strftime('%Y%m%d_%H%M%S')}.tar.gz"
+                file_path = Path(settings.LOCAL_BACKUP_DIR) / local_filename
+                await driver.download(job.storage_path, file_path)
+                downloaded_temp = True
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to download from {backend}: {e}")
+        else:
+            raise HTTPException(status_code=404, detail="File not found on disk")
     
     from app.engine.restore import inspect_backup
     import asyncio
     loop = asyncio.get_event_loop()
-    info = await loop.run_in_executor(None, inspect_backup, file_path)
-    return info
+    try:
+        info = await loop.run_in_executor(None, inspect_backup, file_path)
+        return info
+    finally:
+        if downloaded_temp and file_path.exists():
+            try:
+                file_path.unlink()
+            except Exception:
+                pass
 
 
 

@@ -71,25 +71,6 @@ class Settings(BaseSettings):
     GDRIVE_CREDENTIALS_FILE: str = "/app/credentials.json"
     GDRIVE_FOLDER_ID: Optional[str] = None
 
-    # Notifications — Email / SMTP
-    NOTIFY_EMAIL_TO: Optional[str] = None
-    NOTIFY_EMAIL_FROM: Optional[str] = None
-    SMTP_HOST: Optional[str] = None
-    SMTP_PORT: int = 587
-    SMTP_USER: Optional[str] = None
-    SMTP_PASSWORD: Optional[str] = None
-    SMTP_USE_TLS: bool = True
-
-    # Notifications — Slack
-    NOTIFY_SLACK_WEBHOOK: Optional[str] = None
-
-    # Notifications — Telegram
-    TELEGRAM_BOT_TOKEN: Optional[str] = None
-    TELEGRAM_CHAT_ID: Optional[str] = None
-
-    # Notifications — Generic Webhook
-    NOTIFY_WEBHOOK_URL: Optional[str] = None
-
     # Notifications — Apprise
     NOTIFY_APPRISE_URLS: Optional[str] = None
 
@@ -141,31 +122,7 @@ class Settings(BaseSettings):
     def get_effective_notification_config(self) -> dict:
         """Get all notification configs, merging env vars + runtime overrides."""
         rc = load_runtime_config()
-        
         defaults = {
-            "email": {
-                "enabled": bool(self.NOTIFY_EMAIL_TO and self.SMTP_HOST),
-                "smtp_host": self.SMTP_HOST or "",
-                "smtp_port": self.SMTP_PORT,
-                "smtp_user": self.SMTP_USER or "",
-                "smtp_password": self.SMTP_PASSWORD or "",
-                "smtp_use_tls": self.SMTP_USE_TLS,
-                "from_address": self.NOTIFY_EMAIL_FROM or "",
-                "to_address": self.NOTIFY_EMAIL_TO or "",
-            },
-            "slack": {
-                "enabled": bool(self.NOTIFY_SLACK_WEBHOOK),
-                "webhook_url": self.NOTIFY_SLACK_WEBHOOK or "",
-            },
-            "telegram": {
-                "enabled": bool(self.TELEGRAM_BOT_TOKEN and self.TELEGRAM_CHAT_ID),
-                "bot_token": self.TELEGRAM_BOT_TOKEN or "",
-                "chat_id": self.TELEGRAM_CHAT_ID or "",
-            },
-            "webhook": {
-                "enabled": bool(self.NOTIFY_WEBHOOK_URL),
-                "url": self.NOTIFY_WEBHOOK_URL or "",
-            },
             "apprise": {
                 "enabled": bool(self.NOTIFY_APPRISE_URLS),
                 "urls": self.NOTIFY_APPRISE_URLS or "",

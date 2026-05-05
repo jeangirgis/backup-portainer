@@ -275,39 +275,6 @@ function updateChannelState(channel) {
 async function loadNotificationConfig() {
     try {
         const data = await apiCall('/api/settings/notifications/current');
-        // Email
-        if (data.email) {
-            document.getElementById('notif-email-enabled').checked = data.email.enabled;
-            setVal('smtp-host', data.email.smtp_host);
-            setVal('smtp-port', data.email.smtp_port);
-            setVal('smtp-user', data.email.smtp_user);
-            setVal('smtp-password', data.email.smtp_password);
-            setVal('email-from', data.email.from_address);
-            setVal('email-to', data.email.to_address);
-            if (data.email.smtp_use_tls !== undefined) {
-                document.getElementById('smtp-tls').checked = data.email.smtp_use_tls;
-            }
-            updateChannelState('email');
-        }
-        // Telegram
-        if (data.telegram) {
-            document.getElementById('notif-telegram-enabled').checked = data.telegram.enabled;
-            setVal('telegram-token', data.telegram.bot_token);
-            setVal('telegram-chat-id', data.telegram.chat_id);
-            updateChannelState('telegram');
-        }
-        // Slack
-        if (data.slack) {
-            document.getElementById('notif-slack-enabled').checked = data.slack.enabled;
-            setVal('slack-webhook', data.slack.webhook_url);
-            updateChannelState('slack');
-        }
-        // Webhook
-        if (data.webhook) {
-            document.getElementById('notif-webhook-enabled').checked = data.webhook.enabled;
-            setVal('webhook-url', data.webhook.url);
-            updateChannelState('webhook');
-        }
         // Apprise
         if (data.apprise) {
             document.getElementById('notif-apprise-enabled').checked = data.apprise.enabled;
@@ -321,29 +288,6 @@ async function loadNotificationConfig() {
 
 function getNotificationPayload() {
     return {
-        email: {
-            enabled: document.getElementById('notif-email-enabled')?.checked || false,
-            smtp_host: getVal('smtp-host'),
-            smtp_port: parseInt(getVal('smtp-port')) || 587,
-            smtp_user: getVal('smtp-user'),
-            smtp_password: getVal('smtp-password'),
-            smtp_use_tls: document.getElementById('smtp-tls')?.checked ?? true,
-            from_address: getVal('email-from'),
-            to_address: getVal('email-to'),
-        },
-        telegram: {
-            enabled: document.getElementById('notif-telegram-enabled')?.checked || false,
-            bot_token: getVal('telegram-token'),
-            chat_id: getVal('telegram-chat-id'),
-        },
-        slack: {
-            enabled: document.getElementById('notif-slack-enabled')?.checked || false,
-            webhook_url: getVal('slack-webhook'),
-        },
-        webhook: {
-            enabled: document.getElementById('notif-webhook-enabled')?.checked || false,
-            url: getVal('webhook-url'),
-        },
         apprise: {
             enabled: document.getElementById('notif-apprise-enabled')?.checked || false,
             urls: getVal('apprise-urls'),

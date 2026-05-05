@@ -1,8 +1,6 @@
 from fastapi import APIRouter, Request, HTTPException, Form
 from fastapi.responses import HTMLResponse
 import json
-import smtplib
-from email.mime.text import MIMEText
 from pathlib import Path
 import httpx
 import logging
@@ -22,10 +20,6 @@ async def get_settings_info(request: Request):
         "PORTAINER_URL": settings.PORTAINER_URL,
         "STORAGE_BACKEND": storage["backend"],
         "NOTIFICATIONS": {
-            "slack": notif["slack"]["enabled"],
-            "email": notif["email"]["enabled"],
-            "telegram": notif["telegram"]["enabled"],
-            "webhook": notif["webhook"]["enabled"],
             "apprise": notif["apprise"]["enabled"],
         }
     }
@@ -44,10 +38,6 @@ async def get_settings_info(request: Request):
             <div>
                 <p style="font-size: 0.75rem; color: var(--text-muted);">Notifications</p>
                 <div style="display: flex; gap: 0.5rem; margin-top: 0.25rem; flex-wrap: wrap;">
-                    <span class="status-badge" style="background: { 'rgba(34, 197, 94, 0.2)' if info['NOTIFICATIONS']['email'] else 'rgba(148, 163, 184, 0.2)' }; color: { '#4ade80' if info['NOTIFICATIONS']['email'] else '#94a3b8' };">Email</span>
-                    <span class="status-badge" style="background: { 'rgba(34, 197, 94, 0.2)' if info['NOTIFICATIONS']['telegram'] else 'rgba(148, 163, 184, 0.2)' }; color: { '#4ade80' if info['NOTIFICATIONS']['telegram'] else '#94a3b8' };">Telegram</span>
-                    <span class="status-badge" style="background: { 'rgba(34, 197, 94, 0.2)' if info['NOTIFICATIONS']['slack'] else 'rgba(148, 163, 184, 0.2)' }; color: { '#4ade80' if info['NOTIFICATIONS']['slack'] else '#94a3b8' };">Slack</span>
-                    <span class="status-badge" style="background: { 'rgba(34, 197, 94, 0.2)' if info['NOTIFICATIONS']['webhook'] else 'rgba(148, 163, 184, 0.2)' }; color: { '#4ade80' if info['NOTIFICATIONS']['webhook'] else '#94a3b8' };">Webhook</span>
                     <span class="status-badge" style="background: { 'rgba(34, 197, 94, 0.2)' if info['NOTIFICATIONS']['apprise'] else 'rgba(148, 163, 184, 0.2)' }; color: { '#4ade80' if info['NOTIFICATIONS']['apprise'] else '#94a3b8' };">Apprise</span>
                 </div>
             </div>
@@ -259,72 +249,7 @@ async def test_notification(request: Request):
         config = body.get("config", {})
         test_message = "🧪 Test notification from Backtainer!\nIf you see this, your notification channel is configured correctly."
 
-        if channel == "email":
-            try:
-                msg = MIMEText(test_message)
-                msg['Subject'] = "Backtainer — Test Notification"
-                msg['From'] = config.get("from_address", "")
-                msg['To'] = config.get("to_address", "")
-
-                smtp_host = config.get("smtp_host", "")
-                smtp_port = int(config.get("smtp_port", 587))
-                use_tls = config.get("smtp_use_tls", True)
-
-                with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-                    if use_tls:
-                        server.starttls()
-                    if config.get("smtp_user"):
-                        server.login(config["smtp_user"], config.get("smtp_password", ""))
-                    server.send_message(msg)
-                return {"status": "ok", "message": "Test email sent successfully!"}
-            except Exception as e:
-                return {"status": "error", "message": f"Email failed: {str(e)}"}
-
-        elif channel == "telegram":
-            try:
-                bot_token = config.get("bot_token", "")
-                chat_id = config.get("chat_id", "")
-                url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    resp = await client.post(url, json={
-                        "chat_id": chat_id,
-                        "text": test_message,
-                        "parse_mode": "HTML",
-                    })
-                    if resp.status_code == 200:
-                        return {"status": "ok", "message": "Test Telegram message sent!"}
-                    else:
-                        error_data = resp.json()
-                        return {"status": "error", "message": f"Telegram API error: {error_data.get('description', resp.text)}"}
-            except Exception as e:
-                return {"status": "error", "message": f"Telegram failed: {str(e)}"}
-
-        elif channel == "slack":
-            try:
-                webhook_url = config.get("webhook_url", "")
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    resp = await client.post(webhook_url, json={"text": test_message})
-                    if resp.status_code == 200:
-                        return {"status": "ok", "message": "Test Slack message sent!"}
-                    else:
-                        return {"status": "error", "message": f"Slack error: {resp.status_code} — {resp.text}"}
-            except Exception as e:
-                return {"status": "error", "message": f"Slack failed: {str(e)}"}
-
-        elif channel == "webhook":
-            try:
-                url = config.get("url", "")
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    resp = await client.post(url, json={
-                        "event": "test",
-                        "message": test_message,
-                        "source": "portainer-backup-companion"
-                    })
-                    return {"status": "ok", "message": f"Webhook responded with {resp.status_code}"}
-            except Exception as e:
-                return {"status": "error", "message": f"Webhook failed: {str(e)}"}
-
-        elif channel == "apprise":
+        if channel == "apprise":
             try:
                 import apprise
                 apobj = apprise.Apprise()
