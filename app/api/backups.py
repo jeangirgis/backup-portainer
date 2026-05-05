@@ -266,34 +266,95 @@ async def delete_backup(job_id: str, db: AsyncSession = Depends(get_db)):
     return HTMLResponse(content="")
 
 
+# ── In-memory progress tracking for restore operations ──
+import threading
+_restore_progress = {}  # restore_id -> { steps: [...], result: dict|None, error: str|None }
+_restore_lock = threading.Lock()
+
+RESTORE_STEPS = [
+    {"id": "download", "label": "Download Backup", "icon": "📥"},
+    {"id": "unpack",   "label": "Extract Archive",  "icon": "📦"},
+    {"id": "stop",     "label": "Stop Stack",        "icon": "⏹️"},
+    {"id": "volumes",  "label": "Restore Volumes",   "icon": "💾"},
+    {"id": "start",    "label": "Start Stack",       "icon": "🚀"},
+    {"id": "complete", "label": "Complete",           "icon": "✅"},
+]
+
+
+def _init_restore_progress(restore_id: str):
+    with _restore_lock:
+        _restore_progress[restore_id] = {
+            "steps": {s["id"]: {"status": "pending", "detail": ""} for s in RESTORE_STEPS},
+            "result": None,
+            "error": None,
+            "stack_name": "...",
+        }
+
+
+def _update_progress(restore_id: str, step: str, status: str, detail: str = ""):
+    with _restore_lock:
+        if restore_id in _restore_progress:
+            _restore_progress[restore_id]["steps"][step] = {"status": status, "detail": detail}
+
+
+def _run_restore_background(restore_id: str, job_id: str, file_path: Path, downloaded_temp: bool):
+    """Background function that runs the restore and updates progress."""
+    try:
+        def progress_cb(step, status, detail):
+            _update_progress(restore_id, step, status, detail)
+
+        result = restore_engine.restore(file_path, progress_callback=progress_cb)
+        with _restore_lock:
+            if restore_id in _restore_progress:
+                _restore_progress[restore_id]["result"] = result
+                _restore_progress[restore_id]["stack_name"] = result.get("stack_name", "unknown")
+    except Exception as e:
+        logger.error(f"Restore background task failed: {e}", exc_info=True)
+        with _restore_lock:
+            if restore_id in _restore_progress:
+                _restore_progress[restore_id]["error"] = str(e)
+                _restore_progress[restore_id]["steps"]["complete"] = {"status": "error", "detail": str(e)}
+    finally:
+        if downloaded_temp and file_path.exists():
+            try:
+                file_path.unlink()
+                logger.info(f"Cleaned up temp file: {file_path}")
+            except Exception:
+                pass
+
+
 @router.post("/{job_id}/restore")
-async def restore_backup(job_id: str, db: AsyncSession = Depends(get_db)):
-    """Run restore synchronously and return immediate results."""
+async def restore_backup(job_id: str, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    """Start a restore in the background and return a progress tracking div."""
     result = await db.execute(select(BackupJob).where(BackupJob.id == job_id))
     job = result.scalar_one_or_none()
     if not job or not job.storage_path:
         return HTMLResponse(content="""
             <div class="toast toast-error"><span>❌</span> Backup record not found.</div>
         """)
-    
+
+    # Generate a unique restore ID
+    restore_id = str(uuid.uuid4())[:8]
+    _init_restore_progress(restore_id)
+
     file_path = Path(settings.LOCAL_BACKUP_DIR) / job.storage_path
     downloaded_temp = False
 
     if not file_path.exists():
-        # For remote backends (gdrive, s3, sftp), the storage_path is a remote
-        # identifier (e.g. Google Drive file ID). Download it first.
         backend = settings.get_effective_storage_backend()
         if backend != "local":
             try:
+                _update_progress(restore_id, "download", "running", f"Downloading from {backend}...")
                 driver = settings.get_storage_driver()
-                # Use a descriptive local filename instead of the remote ID
                 local_filename = f"{job.stack_name}_{job.created_at.strftime('%Y%m%d_%H%M%S')}.tar.gz"
                 file_path = Path(settings.LOCAL_BACKUP_DIR) / local_filename
                 logger.info(f"Downloading backup from {backend} ({job.storage_path}) to {file_path}")
                 await driver.download(job.storage_path, file_path)
                 downloaded_temp = True
+                _update_progress(restore_id, "download", "done", f"Downloaded from {backend}")
             except Exception as e:
                 logger.error(f"Failed to download backup from {backend}: {e}")
+                _update_progress(restore_id, "download", "error", str(e)[:100])
                 return HTMLResponse(content=f"""
                     <div class="toast toast-error">
                         <span>❌</span> Failed to download backup from {backend}: {str(e)[:200]}
@@ -305,67 +366,176 @@ async def restore_backup(job_id: str, db: AsyncSession = Depends(get_db)):
                     <span>❌</span> Backup file not found: <code>{job.storage_path}</code>
                 </div>
             """)
-
-    # Run restore synchronously (it uses Docker SDK which is sync)
-    import asyncio
-    loop = asyncio.get_event_loop()
-    try:
-        restore_result = await loop.run_in_executor(None, restore_engine.restore, file_path)
-    except Exception as e:
-        return HTMLResponse(content=f"""
-            <div class="toast toast-error">
-                <span>❌</span> Restore crashed: {str(e)[:200]}
-            </div>
-        """)
-    finally:
-        # Clean up the downloaded temp file to save disk space
-        if downloaded_temp and file_path.exists():
-            try:
-                file_path.unlink()
-                logger.info(f"Cleaned up downloaded temp file: {file_path}")
-            except Exception:
-                pass
-
-    # Build result HTML
-    status = restore_result.get("status", "failed")
-    stack = restore_result.get("stack_name", "unknown")
-    restored = restore_result.get("volumes_restored", 0)
-    found = restore_result.get("volumes_found", 0)
-    error = restore_result.get("error")
-    details = restore_result.get("details", [])
-
-    if status == "success":
-        details_html = "".join(f"<li>{d}</li>" for d in details)
-        return HTMLResponse(content=f"""
-            <div class="toast toast-success">
-                <div>
-                    <strong>✅ Restore Complete — {stack}</strong><br>
-                    <span style="font-size: 0.8rem;">{restored}/{found} volumes restored</span>
-                    <ul style="margin-top: 0.5rem; font-size: 0.75rem; list-style: none; padding: 0;">{details_html}</ul>
-                </div>
-            </div>
-        """)
-    elif status == "partial" or status == "empty":
-        details_html = "".join(f"<li>{d}</li>" for d in details)
-        return HTMLResponse(content=f"""
-            <div class="toast toast-info">
-                <div>
-                    <strong>⚠️ Partial Restore — {stack}</strong><br>
-                    <span style="font-size: 0.8rem;">{restored}/{found} volumes restored</span>
-                    {f'<br><span style="font-size: 0.75rem; color: var(--warning);">{error}</span>' if error else ''}
-                    <ul style="margin-top: 0.5rem; font-size: 0.75rem; list-style: none; padding: 0;">{details_html}</ul>
-                </div>
-            </div>
-        """)
     else:
-        return HTMLResponse(content=f"""
-            <div class="toast toast-error">
-                <div>
-                    <strong>❌ Restore Failed — {stack}</strong><br>
-                    <span style="font-size: 0.8rem;">{error or 'Unknown error'}</span>
-                </div>
-            </div>
+        _update_progress(restore_id, "download", "done", "File available locally")
+
+    # Store stack name
+    with _restore_lock:
+        if restore_id in _restore_progress:
+            _restore_progress[restore_id]["stack_name"] = job.stack_name
+
+    # Start restore in background thread
+    import threading
+    t = threading.Thread(
+        target=_run_restore_background,
+        args=(restore_id, job_id, file_path, downloaded_temp),
+        daemon=True
+    )
+    t.start()
+
+    # Return the progress tracker div that polls for updates
+    return HTMLResponse(content=f"""
+        <div id="restore-progress-{restore_id}"
+             hx-get="/api/backups/restore/{restore_id}/progress"
+             hx-trigger="load, every 1500ms"
+             hx-swap="outerHTML">
+            {_render_progress_html(restore_id)}
+        </div>
+    """)
+
+
+@router.get("/restore/{restore_id}/progress")
+async def get_restore_progress(restore_id: str):
+    """Return current restore progress as styled HTML."""
+    with _restore_lock:
+        progress = _restore_progress.get(restore_id)
+
+    if not progress:
+        return HTMLResponse(content="""
+            <div class="toast toast-error"><span>❌</span> Restore session not found.</div>
         """)
+
+    result = progress.get("result")
+    error = progress.get("error")
+
+    # If complete (has result or error), render final state without polling
+    if result or error:
+        html = _render_progress_html(restore_id)
+        # Add final result summary
+        if result:
+            status = result.get("status", "failed")
+            stack = result.get("stack_name", "unknown")
+            restored = result.get("volumes_restored", 0)
+            found = result.get("volumes_found", 0)
+            details = result.get("details", [])
+            err = result.get("error")
+            details_html = "".join(f"<li>{d}</li>" for d in details[-6:])  # Show last 6 details
+
+            if status == "success":
+                html += f"""
+                <div class="toast toast-success" style="margin-top: 1rem;">
+                    <div>
+                        <strong>✅ Restore Complete — {stack}</strong><br>
+                        <span style="font-size: 0.8rem;">{restored}/{found} volumes restored</span>
+                        <ul style="margin-top: 0.5rem; font-size: 0.72rem; list-style: none; padding: 0; opacity: 0.85;">{details_html}</ul>
+                    </div>
+                </div>"""
+            elif status in ("partial", "empty"):
+                html += f"""
+                <div class="toast toast-info" style="margin-top: 1rem;">
+                    <div>
+                        <strong>⚠️ Partial Restore — {stack}</strong><br>
+                        <span style="font-size: 0.8rem;">{restored}/{found} volumes</span>
+                        {f'<br><span style="font-size: 0.75rem; color: var(--warning);">{err}</span>' if err else ''}
+                    </div>
+                </div>"""
+            else:
+                html += f"""
+                <div class="toast toast-error" style="margin-top: 1rem;">
+                    <div>
+                        <strong>❌ Restore Failed — {stack}</strong><br>
+                        <span style="font-size: 0.8rem;">{err or 'Unknown error'}</span>
+                    </div>
+                </div>"""
+        elif error:
+            html += f"""
+            <div class="toast toast-error" style="margin-top: 1rem;">
+                <span>❌</span> Restore crashed: {error[:200]}
+            </div>"""
+
+        return HTMLResponse(content=f'<div id="restore-progress-{restore_id}">{html}</div>')
+
+    # Still running — keep polling
+    html = _render_progress_html(restore_id)
+    return HTMLResponse(content=f"""
+        <div id="restore-progress-{restore_id}"
+             hx-get="/api/backups/restore/{restore_id}/progress"
+             hx-trigger="every 1500ms"
+             hx-swap="outerHTML">
+            {html}
+        </div>
+    """)
+
+
+def _render_progress_html(restore_id: str) -> str:
+    """Render the progress steps card as HTML."""
+    with _restore_lock:
+        progress = _restore_progress.get(restore_id, {})
+
+    steps = progress.get("steps", {})
+    stack_name = progress.get("stack_name", "...")
+
+    html = f"""
+    <div class="card" style="padding: 1.5rem; margin-bottom: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;">
+            <div class="spinner" style="width: 1.2rem; height: 1.2rem;"></div>
+            <strong style="font-family: 'Outfit', sans-serif; font-size: 1rem;">
+                Restoring: {stack_name}
+            </strong>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+    """
+
+    for step_def in RESTORE_STEPS:
+        sid = step_def["id"]
+        step_state = steps.get(sid, {"status": "pending", "detail": ""})
+        status = step_state["status"]
+        detail = step_state["detail"]
+        icon = step_def["icon"]
+        label = step_def["label"]
+
+        if status == "done":
+            indicator = "✅"
+            color = "var(--success)"
+            opacity = "0.7"
+        elif status == "running":
+            indicator = '<div class="spinner" style="width: 0.9rem; height: 0.9rem; display: inline-block;"></div>'
+            color = "var(--text)"
+            opacity = "1"
+        elif status == "error":
+            indicator = "❌"
+            color = "var(--error)"
+            opacity = "1"
+        else:
+            indicator = '<span style="opacity: 0.3;">○</span>'
+            color = "var(--text-muted)"
+            opacity = "0.4"
+
+        html += f"""
+        <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.4rem 0; opacity: {opacity}; transition: opacity 0.3s;">
+            <span style="width: 1.2rem; text-align: center; font-size: 0.85rem; flex-shrink: 0;">{indicator}</span>
+            <span style="font-size: 0.85rem; color: {color}; font-weight: 500; min-width: 8rem;">{icon} {label}</span>
+            <span style="font-size: 0.72rem; color: var(--text-muted); flex: 1;">{detail}</span>
+        </div>"""
+
+    html += """
+        </div>
+    </div>"""
+
+    # Hide the spinner in header if all done
+    result = progress.get("result")
+    error = progress.get("error")
+    if result or error:
+        html = html.replace(
+            '<div class="spinner" style="width: 1.2rem; height: 1.2rem;"></div>',
+            '', 1
+        )
+        if result and result.get("status") == "success":
+            html = html.replace("Restoring:", "Restored:")
+        elif error or (result and result.get("status") == "failed"):
+            html = html.replace("Restoring:", "Failed:")
+
+    return html
 
 
 @router.get("/{job_id}/inspect")
@@ -404,8 +574,6 @@ async def inspect_backup_endpoint(job_id: str, db: AsyncSession = Depends(get_db
                 file_path.unlink()
             except Exception:
                 pass
-
-
 
 
 

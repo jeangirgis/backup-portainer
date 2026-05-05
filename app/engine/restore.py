@@ -16,11 +16,23 @@ class RestoreEngine:
         self.settings = get_settings()
         self.docker_client = docker.from_env()
 
-    def restore(self, bundle_path: Path) -> dict:
+    def restore(self, bundle_path: Path, progress_callback=None) -> dict:
         """
         Restore volumes from a backup bundle.
         Stops the stack's containers, restores data, then restarts them.
+        
+        progress_callback: optional callable(step: str, status: str, detail: str)
+            step: step identifier
+            status: 'running', 'done', 'error'
+            detail: human-readable detail text
         """
+        def _progress(step, status, detail=""):
+            if progress_callback:
+                try:
+                    progress_callback(step, status, detail)
+                except Exception:
+                    pass
+
         temp_dir = Path(tempfile.mkdtemp())
         results = {
             "status": "failed",
@@ -37,12 +49,15 @@ class RestoreEngine:
 
             if not bundle_path.exists():
                 results["error"] = f"Backup file not found: {bundle_path}"
+                _progress("unpack", "error", "Backup file not found")
                 return results
 
             # 1. Unpack bundle
+            _progress("unpack", "running", "Extracting backup archive...")
             logger.info("  Unpacking tar.gz...")
             with tarfile.open(bundle_path, "r:gz") as tar:
                 tar.extractall(path=temp_dir)
+            _progress("unpack", "done", "Backup extracted")
 
             # 2. Find manifest
             manifest_path = temp_dir / "manifest.json"
@@ -52,6 +67,7 @@ class RestoreEngine:
                     manifest_path = candidates[0]
                 else:
                     results["error"] = "Invalid backup: manifest.json missing"
+                    _progress("unpack", "error", "Invalid backup: manifest.json missing")
                     return results
 
             with open(manifest_path, "r") as f:
@@ -68,6 +84,7 @@ class RestoreEngine:
             if not volume_list:
                 results["error"] = "No volumes recorded in this backup"
                 results["status"] = "empty"
+                _progress("unpack", "error", "No volumes in backup")
                 return results
 
             # Read stack ID and endpoint ID (handle both old and new manifest formats)
@@ -89,8 +106,7 @@ class RestoreEngine:
             logger.info(f"  Resolved: stack_id={stack_id}, endpoint_id={endpoint_id}, stack_name={stack_name}")
 
             # 3. STOP the stack
-            # Use Portainer API first (keeps Portainer state in sync),
-            # fall back to Docker direct if Portainer API unavailable
+            _progress("stop", "running", f"Stopping stack '{stack_name}'...")
             logger.info(f"  Stopping stack '{stack_name}'...")
             portainer_stopped = False
             if stack_id and endpoint_id:
@@ -107,6 +123,8 @@ class RestoreEngine:
                 else:
                     results["details"].append("⚠️ No running containers found for this stack — restoring anyway")
 
+            _progress("stop", "done", "Stack stopped")
+
             # Give containers a moment to fully release file handles
             time.sleep(3)
 
@@ -114,9 +132,12 @@ class RestoreEngine:
             self._ensure_alpine()
 
             # 5. Restore each volume
-            for vol_info in volume_list:
+            total_vols = len(volume_list)
+            for idx, vol_info in enumerate(volume_list, 1):
                 vol_name = vol_info if isinstance(vol_info, str) else vol_info.get("name", str(vol_info))
                 tar_file = volumes_base / f"{vol_name}.tar"
+
+                _progress("volumes", "running", f"Restoring volume {idx}/{total_vols}: {vol_name}")
 
                 if not tar_file.exists():
                     msg = f"Volume '{vol_name}': tar not found in backup"
@@ -142,7 +163,10 @@ class RestoreEngine:
                     logger.error(f"  {msg}", exc_info=True)
                     results["details"].append(msg)
 
+            _progress("volumes", "done", f"{results['volumes_restored']}/{total_vols} volumes restored")
+
             # 6. RESTART the stack via Portainer
+            _progress("start", "running", "Starting stack...")
             logger.info(f"  Starting stack '{stack_name}'...")
             portainer_started = False
             if stack_id and endpoint_id:
@@ -159,6 +183,7 @@ class RestoreEngine:
 
                 # If the stack was deleted (404), recreate it from backup
                 if not portainer_started and "not found" in start_msg.lower():
+                    _progress("start", "running", "Recreating deleted stack...")
                     logger.info(f"  Stack was deleted — recreating from backup...")
                     # Ensure Docker networks from compose file exist before creating the stack
                     net_msg = self._ensure_compose_networks(stack_name, temp_dir)
@@ -175,6 +200,8 @@ class RestoreEngine:
                 restarted = self._start_containers(stopped_containers)
                 results["details"].append(f"Restarted {restarted} containers via Docker")
 
+            _progress("start", "done", "Stack started")
+
             # Set status
             if results["volumes_restored"] > 0:
                 results["status"] = "success"
@@ -183,12 +210,14 @@ class RestoreEngine:
             else:
                 results["status"] = "empty"
 
+            _progress("complete", "done", f"Restore complete: {results['volumes_restored']}/{results['volumes_found']} volumes")
             logger.info(f"=== RESTORE COMPLETE: {results['volumes_restored']}/{results['volumes_found']} volumes ===")
             return results
 
         except Exception as e:
             logger.error(f"=== RESTORE FAILED: {e} ===", exc_info=True)
             results["error"] = str(e)
+            _progress("complete", "error", str(e))
             # Try to restart the stack even if restore failed
             if stack_id and endpoint_id:
                 self._start_portainer_stack(stack_id, endpoint_id)
