@@ -43,7 +43,7 @@ Adding Backtainer to your Portainer instance via a Git repository is the recomme
 3. Enter a name for the stack (e.g., `backup-companion`).
 4. Select the **Repository** build method.
 5. In the **Repository URL** field, enter:
-   `https://github.com/jeangirgis/backup-portainer.git`
+   `https://github.com/jeangirgis/backtainer.git`
 6. Ensure the **Compose path** is set to `docker-compose.yml`.
 7. In the **Environment variables** section, add the required settings:
    - `PORTAINER_URL`: The URL of your Portainer instance (e.g., `http://portainer:9000`)
