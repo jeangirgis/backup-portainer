@@ -40,7 +40,11 @@ class BackupEngine:
             await db.refresh(job)
             return job
 
-    async def run_job(self, job_id: str):
+    async def run_job(self, job_id: str, progress_callback=None):
+        def _report(step, status, detail=""):
+            if progress_callback:
+                progress_callback(step, status, detail)
+                
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(BackupJob).where(BackupJob.id == job_id))
             job = result.scalar_one_or_none()
@@ -54,16 +58,24 @@ class BackupEngine:
 
                 # Export Stack
                 logger.info(f"=== BACKUP START for stack_id={job.stack_id} ===")
+                _report("stack", "running", "Exporting docker-compose...")
                 stack_data = await self.stack_exporter.export(job.stack_id, temp_dir)
                 stack_name = stack_data.get("Name", f"Stack {job.stack_id}")
                 job.stack_name = stack_name
                 await db.commit()
                 logger.info(f"Stack name resolved: '{stack_name}'")
+                _report("stack", "success", f"Exported stack '{stack_name}'")
 
                 # Find & Export Volumes
                 volume_names = self._get_stack_volumes(stack_name)
                 logger.info(f"=== VOLUME EXPORT: {len(volume_names)} volumes to export: {volume_names} ===")
-                self.volume_exporter.export(volume_names, temp_dir)
+                
+                if volume_names:
+                    _report("volumes", "running", f"Exporting {len(volume_names)} volumes...")
+                    self.volume_exporter.export(volume_names, temp_dir)
+                    _report("volumes", "success", "Volumes exported successfully")
+                else:
+                    _report("volumes", "success", "No volumes to export")
 
                 # Log what's in temp_dir before packaging
                 for p in sorted(temp_dir.rglob("*")):
@@ -71,12 +83,16 @@ class BackupEngine:
                     logger.info(f"  TEMP: {p.relative_to(temp_dir)} ({size} bytes)")
 
                 # Package
+                _report("package", "running", "Creating compressed archive...")
                 bundle_path = self.packager.package(temp_dir, stack_data, volume_names)
                 logger.info(f"Bundle created: {bundle_path.name} ({bundle_path.stat().st_size} bytes)")
+                _report("package", "success", "Archive created")
 
                 # Upload
                 storage = self.settings.get_storage_driver()
+                _report("upload", "running", "Uploading to storage...")
                 storage_path = await storage.upload(bundle_path, bundle_path.name)
+                _report("upload", "success", "Upload complete")
 
                 # Finalize
                 job.status = "success"
@@ -86,6 +102,7 @@ class BackupEngine:
                 await db.commit()
 
                 logger.info(f"=== BACKUP COMPLETE: {job.id} — {job.size_bytes} bytes ===")
+                _report("complete", "success", "Backup finished successfully")
                 await notifier.on_success(job)
 
             except Exception as e:
@@ -94,6 +111,7 @@ class BackupEngine:
                 job.error_message = str(e)
                 job.completed_at = datetime.utcnow()
                 await db.commit()
+                _report("complete", "error", str(e))
                 await notifier.on_failure(job)
             finally:
                 shutil.rmtree(temp_dir, ignore_errors=True)

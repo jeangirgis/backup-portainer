@@ -61,31 +61,113 @@ function showLoginModal(message) {
     }, 100);
 }
 
+// --- Custom Confirmation Modals ---
+document.body.addEventListener('htmx:confirm', function(evt) {
+    evt.preventDefault();
+    
+    // Create the dialog if it doesn't exist
+    let dialog = document.getElementById('custom-confirm-modal');
+    if (!dialog) {
+        dialog = document.createElement('dialog');
+        dialog.id = 'custom-confirm-modal';
+        dialog.className = 'confirm-dialog';
+        dialog.innerHTML = `
+            <div class="confirm-content">
+                <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <span>⚠️</span> Confirmation Required
+                </h3>
+                <p id="confirm-msg" style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.9rem;"></p>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                    <button class="btn btn-outline" id="confirm-cancel" style="padding: 0.5rem 1rem;">Cancel</button>
+                    <button class="btn btn-primary" id="confirm-ok" style="padding: 0.5rem 1rem; background: var(--error);">Proceed</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(dialog);
+    }
+    
+    // Set the message and show
+    document.getElementById('confirm-msg').innerText = evt.detail.question;
+    dialog.showModal();
+    
+    // Handle buttons
+    const okBtn = document.getElementById('confirm-ok');
+    const cancelBtn = document.getElementById('confirm-cancel');
+    
+    // Remove old event listeners
+    const newOkBtn = okBtn.cloneNode(true);
+    const newCancelBtn = cancelBtn.cloneNode(true);
+    okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+    
+    newOkBtn.onclick = () => {
+        dialog.close();
+        evt.detail.issueRequest();
+    };
+    
+    newCancelBtn.onclick = () => {
+        dialog.close();
+    };
+});
+
 // --- Check auth on page load ---
 if (!getToken()) {
     setTimeout(() => showLoginModal(), 200);
 }
 
-// --- Auto-dismiss toasts after 8 seconds ---
+// --- Unified Toast System ---
+function showToast(message, type = 'success') {
+    // 1. Create or get container
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
+    }
+    
+    // 2. Create toast element
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type} slide-in`;
+    
+    const icon = type === 'success' ? '✅' : (type === 'error' ? '❌' : 'ℹ️');
+    toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+    
+    // 3. Append and auto-remove
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
+// Intercept custom HTMX events from backend
+document.body.addEventListener('app:toast', function(evt) {
+    showToast(evt.detail.message, evt.detail.type);
+});
+
+// Also auto-dismiss existing static toasts
 const toastObserver = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
             if (node.nodeType === 1 && node.classList && node.classList.contains('toast')) {
-                setTimeout(() => {
-                    node.style.transition = 'opacity 0.3s ease';
-                    node.style.opacity = '0';
-                    setTimeout(() => node.remove(), 300);
-                }, 8000);
+                // If it's in the fixed container, it's handled by showToast. 
+                // This is for inline toasts returned by HTMX.
+                if (!node.closest('#toast-container')) {
+                    setTimeout(() => {
+                        node.style.transition = 'all 0.3s ease';
+                        node.style.opacity = '0';
+                        setTimeout(() => node.remove(), 300);
+                    }, 5000);
+                }
             }
         });
     });
 });
 
 document.addEventListener('DOMContentLoaded', () => {
-    const toastTarget = document.getElementById('restore-toast');
-    if (toastTarget) {
-        toastObserver.observe(toastTarget, { childList: true, subtree: true });
-    }
+    toastObserver.observe(document.body, { childList: true, subtree: true });
 });
 
 // ============================================================

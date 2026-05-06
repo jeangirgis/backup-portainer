@@ -106,10 +106,24 @@ async def upload_backup_file(file: UploadFile = File(...), db: AsyncSession = De
     """)
 
 
+_backup_progress = {}  # job_id -> { "step": "...", "status": "...", "detail": "..." }
+_backup_lock = threading.Lock()
+
+def _update_backup_progress(job_id: str, step: str, status: str, detail: str):
+    with _backup_lock:
+        _backup_progress[job_id] = {"step": step, "status": status, "detail": detail}
+
 @router.post("/{stack_id}", response_model=BackupJobSchema)
 async def start_backup(stack_id: str, background_tasks: BackgroundTasks, request: Request):
     job = await engine.create_job(stack_id)
-    background_tasks.add_task(engine.run_job, job.id)
+    
+    with _backup_lock:
+        _backup_progress[job.id] = {"step": "init", "status": "running", "detail": "Starting backup..."}
+        
+    def progress_cb(step, status, detail):
+        _update_backup_progress(job.id, step, status, detail)
+        
+    background_tasks.add_task(engine.run_job, job.id, progress_cb)
     
     if "hx-request" in request.headers:
         return HTMLResponse(content=f"""
@@ -162,17 +176,24 @@ async def list_backups(request: Request, db: AsyncSession = Depends(get_db)):
                 <td>
                     <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                         {f'<a href="/api/backups/{job.id}/download?token={settings.SECRET_KEY}" class="btn btn-sm btn-outline">Download</a>' if job.status == 'success' else ''}
-                        {f'<button class="btn btn-sm btn-primary" hx-post="/api/backups/{job.id}/restore" hx-target="#restore-toast" hx-swap="innerHTML" hx-confirm="This will overwrite existing volume data. Proceed?">Restore</button>' if job.status == 'success' else ''}
+                        {f'<button class="btn btn-sm btn-primary" hx-post="/api/backups/{job.id}/restore" hx-target="#restore-toast" hx-swap="innerHTML" hx-confirm="This will overwrite existing volume data. Proceed?" hx-indicator="#spinner-restore-{job.id}"><div id="spinner-restore-{job.id}" class="spinner htmx-indicator" style="width: 1rem; height: 1rem; border-width: 2px;"></div><span>Restore</span></button>' if job.status == 'success' else ''}
                         <button class="btn btn-sm btn-danger"
-                                hx-delete="/api/backups/{job.id}" hx-target="#job-{job.id}" hx-swap="outerHTML" hx-confirm="Delete this backup?">
-                            Delete
+                                hx-delete="/api/backups/{job.id}" hx-target="#job-{job.id}" hx-swap="outerHTML" hx-confirm="Delete this backup?" hx-indicator="#spinner-del-{job.id}">
+                            <div id="spinner-del-{job.id}" class="spinner htmx-indicator" style="width: 1rem; height: 1rem; border-width: 2px;"></div>
+                            <span>Delete</span>
                         </button>
                     </div>
                 </td>
             </tr>
             """
         if not html:
-            html = '<tr><td colspan="6" style="text-align: center; padding: 3rem; color: var(--text-muted);">No backups yet. Go to Dashboard and click "Backup Now" on a stack.</td></tr>'
+            html = """<tr><td colspan="6" style="text-align: center; padding: 4rem 1rem;">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-muted); opacity: 0.3; margin-bottom: 1rem;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                </svg>
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; color: var(--text); margin-bottom: 0.5rem;">No Backups Found</h3>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Go to the Dashboard and click "Backup Now" on a stack to get started.</p>
+            </td></tr>"""
         return HTMLResponse(content=html)
     
     return jobs
@@ -187,11 +208,32 @@ async def get_backup_status(job_id: str, request: Request, db: AsyncSession = De
     
     if "hx-request" in request.headers:
         if job.status in ["pending", "running"]:
+            progress = {}
+            with _backup_lock:
+                if job.id in _backup_progress:
+                    progress = _backup_progress[job.id]
+                    
+            detail = progress.get("detail", "Preparing backup...")
+            step_icon = "🔄"
+            if progress.get("step") == "stack": step_icon = "📄"
+            elif progress.get("step") == "volumes": step_icon = "💾"
+            elif progress.get("step") == "package": step_icon = "📦"
+            elif progress.get("step") == "upload": step_icon = "☁️"
+            
             return HTMLResponse(content=f"""
-                <div hx-get="/api/backups/{job.id}/status" hx-trigger="every 2s" hx-swap="outerHTML"
-                     style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
-                    <span class="status-badge status-{job.status}">{job.status.upper()}</span>
-                    <div class="spinner"></div>
+                <div hx-get="/api/backups/{job.id}/status" hx-trigger="every 1s" hx-swap="outerHTML"
+                     style="display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; width: 100%; border: 1px solid var(--border-highlight); padding: 0.75rem; border-radius: 0.75rem; background: rgba(0,0,0,0.2);">
+                    <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                        <span style="font-size: 0.8rem; font-weight: 600; color: #34d399;">{step_icon} BACKUP IN PROGRESS</span>
+                        <div class="spinner" style="width: 1rem; height: 1rem; border-width: 2px;"></div>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        {detail}
+                    </div>
+                    <div style="width: 100%; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 0.25rem;">
+                        <div style="height: 100%; width: 100%; background: linear-gradient(90deg, transparent, var(--primary), transparent); animation: slideProgress 1.5s infinite; transform-origin: left;"></div>
+                    </div>
+                    <style>@keyframes slideProgress {{ 0% {{ transform: translateX(-100%); }} 100% {{ transform: translateX(100%); }} }}</style>
                 </div>
             """)
         elif job.status == "success":

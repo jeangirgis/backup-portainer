@@ -74,6 +74,17 @@ async def list_stacks(request: Request):
                 ))
 
             if "hx-request" in request.headers:
+                if not stack_list:
+                    return HTMLResponse(content="""
+                    <div class="card" style="grid-column: 1/-1; text-align: center; padding: 4rem 1rem;">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-muted); opacity: 0.3; margin-bottom: 1rem;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+                        </svg>
+                        <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; color: var(--text); margin-bottom: 0.5rem;">No Stacks Found</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">There are no Docker stacks available in Portainer to backup.</p>
+                    </div>
+                    """)
+
                 html = ""
                 for s in stack_list:
                     status_class = "status-running" if s.status == "running" else "status-stopped"
@@ -93,8 +104,8 @@ async def list_stacks(request: Request):
                                     hx-post="/api/backups/{s.id}" 
                                     hx-target="#stack-actions-{s.id}"
                                     hx-indicator="#spinner-{s.id}">
-                                <div id="spinner-{s.id}" class="spinner htmx-indicator"></div>
-                                Backup Now
+                                <div id="spinner-{s.id}" class="spinner htmx-indicator" style="width: 1.2rem; height: 1.2rem; border-width: 2px;"></div>
+                                <span>Backup Now</span>
                             </button>
                         </div>
                     </div>

@@ -5,7 +5,7 @@ services:
   backup-companion-v2:
     build: .
     labels:
-      - "version=2.4.0"
+      - "version=2.5.0"
     container_name: portainer-backup-companion
     restart: unless-stopped
     ports:

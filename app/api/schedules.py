@@ -64,7 +64,13 @@ async def list_schedules(request: Request, db: AsyncSession = Depends(get_db)):
     if "hx-request" in request.headers:
         html = ""
         if not schedules:
-            html = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">No schedules yet. Create one on the right →</td></tr>'
+            html = """<tr><td colspan="7" style="text-align: center; padding: 4rem 1rem;">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-muted); opacity: 0.3; margin-bottom: 1rem;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 1.2rem; color: var(--text); margin-bottom: 0.5rem;">No Schedules Yet</h3>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Select a stack above and set a frequency to automate your backups.</p>
+            </td></tr>"""
             return HTMLResponse(content=html)
 
         for s in schedules:
@@ -90,8 +96,9 @@ async def list_schedules(request: Request, db: AsyncSession = Depends(get_db)):
                     </button>
                     <button class="btn btn-sm btn-danger"
                             hx-delete="/api/schedules/{s.id}" hx-target="#schedule-{s.id}" hx-swap="outerHTML"
-                            hx-confirm="Delete this schedule?">
-                        Delete
+                            hx-confirm="Delete this schedule?" hx-indicator="#spinner-sch-del-{s.id}">
+                        <div id="spinner-sch-del-{s.id}" class="spinner htmx-indicator" style="width: 1rem; height: 1rem; border-width: 2px;"></div>
+                        <span>Delete</span>
                     </button>
                 </td>
             </tr>

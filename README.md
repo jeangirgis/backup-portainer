@@ -139,4 +139,4 @@ Backtainer uses the powerful **Apprise** library, allowing you to send backup su
 Click the **🌓 Theme** button in the top right corner to toggle between Dark Mode (default) and Light Mode to suit your preference!
 
 ---
-**Backtainer v2.4.0** — Taking the stress out of self-hosting.
+**Backtainer v2.5.0** — Taking the stress out of self-hosting.

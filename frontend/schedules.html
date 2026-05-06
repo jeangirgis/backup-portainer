@@ -134,8 +134,9 @@
                         </div>
 
                         <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                            <button type="submit" id="submit-btn" class="btn btn-primary" style="flex: 1;">
-                                Create Schedule
+                            <button type="submit" id="submit-btn" class="btn btn-primary" style="flex: 1;" hx-indicator="#submit-spinner">
+                                <div id="submit-spinner" class="spinner htmx-indicator" style="width: 1.2rem; height: 1.2rem;"></div>
+                                <span id="submit-text">Create Schedule</span>
                             </button>
                             <button type="button" id="cancel-btn" class="btn btn-outline" style="display: none;" onclick="resetForm()">
                                 Cancel
@@ -147,7 +148,7 @@
         </main>
                 <footer class="app-footer">
             <p style="text-align: center; font-size: 0.75rem; color: var(--text-muted);">
-                Backtainer v2.4.0
+                Backtainer v2.5.0
             </p>
         </footer>
 
@@ -214,7 +215,7 @@
             htmx.process(form);
 
             document.getElementById('form-title').innerText = '✏️ Edit Schedule';
-            document.getElementById('submit-btn').innerText = 'Update Schedule';
+            document.getElementById('submit-text').innerText = 'Update Schedule';
             document.getElementById('cancel-btn').style.display = 'block';
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -238,7 +239,7 @@
             htmx.process(form);
 
             document.getElementById('form-title').innerText = '➕ New Schedule';
-            document.getElementById('submit-btn').innerText = 'Create Schedule';
+            document.getElementById('submit-text').innerText = 'Create Schedule';
             document.getElementById('cancel-btn').style.display = 'none';
         }
     </script>

@@ -42,38 +42,45 @@
             <!-- ═══════════════════════════════════════ -->
             <div class="tab-content active" id="content-general">
                 <!-- Authentication -->
-                <div class="card" style="margin-bottom: 2rem;">
-                    <h3 class="settings-section-title"><span class="icon">🔐</span> Authentication</h3>
-                    <div class="form-group">
-                        <label class="form-label">Companion Secret Key</label>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <input type="password" id="secret-key-input" class="form-input" style="flex: 1;">
-                            <button class="btn btn-primary" onclick="saveSecretKey(document.getElementById('secret-key-input').value)">Save</button>
+                <details class="card details-accordion" open>
+                    <summary class="settings-section-title"><span class="icon">🔐</span> Authentication <span class="accordion-chevron"></span></summary>
+                    <div class="accordion-content">
+                        <div class="form-group" style="margin-top: 1rem;">
+                            <label class="form-label">Companion Secret Key</label>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <input type="password" id="secret-key-input" class="form-input" style="flex: 1;">
+                                <button class="btn btn-primary" onclick="saveSecretKey(document.getElementById('secret-key-input').value)">Save</button>
+                            </div>
+                            <p class="form-hint">This key must match the <code>SECRET_KEY</code> environment variable.</p>
                         </div>
-                        <p class="form-hint">This key must match the <code>SECRET_KEY</code> environment variable.</p>
                     </div>
-                </div>
+                </details>
 
                 <!-- System Configuration -->
-                <div class="card" style="margin-bottom: 2rem;">
-                    <h3 class="settings-section-title"><span class="icon">⚙️</span> System Configuration</h3>
-                    <div id="settings-info" hx-get="/api/settings" hx-trigger="load">
-                        <div class="spinner"></div>
+                <details class="card details-accordion" open style="margin-top: 2rem;">
+                    <summary class="settings-section-title"><span class="icon">⚙️</span> System Configuration <span class="accordion-chevron"></span></summary>
+                    <div class="accordion-content">
+                        <div id="settings-info" hx-get="/api/settings" hx-trigger="load" style="margin-top: 1rem;">
+                            <div class="spinner"></div>
+                        </div>
+                        <hr class="divider">
+                        <button class="btn btn-outline" hx-post="/api/settings/test" hx-target="#test-result" hx-indicator="#spinner-test-portainer">
+                            <div id="spinner-test-portainer" class="spinner htmx-indicator" style="width: 1.2rem; height: 1.2rem; border-width: 2px;"></div>
+                            <span>Test Portainer Connection</span>
+                        </button>
+                        <div id="test-result" style="margin-top: 1rem;"></div>
                     </div>
-                    <hr class="divider">
-                    <button class="btn btn-outline" hx-post="/api/settings/test" hx-target="#test-result">
-                        Test Portainer Connection
-                    </button>
-                    <div id="test-result" style="margin-top: 1rem;"></div>
-                </div>
+                </details>
 
                 <!-- System Health -->
-                <div class="card">
-                    <h3 class="settings-section-title"><span class="icon">📊</span> System Health</h3>
-                    <div id="health-detail" hx-get="/api/health" hx-trigger="load">
-                        <div class="spinner"></div>
+                <details class="card details-accordion" open style="margin-top: 2rem;">
+                    <summary class="settings-section-title"><span class="icon">📊</span> System Health <span class="accordion-chevron"></span></summary>
+                    <div class="accordion-content">
+                        <div id="health-detail" hx-get="/api/health" hx-trigger="load" style="margin-top: 1rem;">
+                            <div class="spinner"></div>
+                        </div>
                     </div>
-                </div>
+                </details>
             </div>
 
             <!-- ═══════════════════════════════════════ -->
@@ -256,7 +263,7 @@
         </main>
                 <footer class="app-footer">
             <p style="text-align: center; font-size: 0.75rem; color: var(--text-muted);">
-                Backtainer v2.4.0
+                Backtainer v2.5.0
             </p>
         </footer>
 
