@@ -14,6 +14,22 @@ A lightweight, self-hosted companion for Portainer that provides automated and o
 - **Multiple Storage Backends:** Store backups locally, securely in S3-compatible storage (AWS, MinIO, Cloudflare R2), SFTP, or Google Drive (Shared Drives).
 - **Modern UI:** A stunning HTMX-powered dashboard with Dark and Light modes.
 
+## 📸 Screenshots
+
+| Dashboard | History |
+|---|---|
+| ![Dashboard](assets/dashboard.png) | ![History](assets/history.png) |
+
+| Schedules | Logs |
+|---|---|
+| ![Schedules](assets/schedules.png) | ![Logs](assets/logs.png) |
+
+| Settings (General) | Settings (Storage) | Settings (Notifications) |
+|---|---|---|
+| ![Settings General](assets/settings-general.png) | ![Settings Storage](assets/settings-storage.png) | ![Settings Notifications](assets/settings-notifications.png) |
+
+---
+
 ---
 
 ## 🚀 Quick Start Tutorial
@@ -108,7 +124,7 @@ Go to **Settings > Storage**, select SFTP, and enter your server IP, Port (usual
 >
 > ⚠️ **CRITICAL:** You MUST use a Google Workspace **Shared Drive**. Regular personal Google Drive folders will not work due to Service Account quota limits (0 bytes).
 
-1. Go to Google Cloud Console, enable the **Google Drive API**, and create a **Service Account**.
+1. Go to [Google Cloud Console](https://console.cloud.google.com/), enable the [Google Drive API](https://console.cloud.google.com/apis/library/drive.googleapis.com), and create a [Service Account](https://console.cloud.google.com/iam-admin/serviceaccounts).
 2. Download the JSON Key file.
 3. In Google Drive, create a **Shared Drive** and share it with your Service Account email as a **Content Manager**.
 4. Copy the Folder ID from the URL (e.g., `0ABcDeFgHiJkLmNoPq`).
@@ -118,7 +134,7 @@ Go to **Settings > Storage**, select SFTP, and enter your server IP, Port (usual
 
 ## 🔔 Universal Notifications (Apprise)
 
-Backtainer uses the powerful **Apprise** library, allowing you to send backup success/failure alerts to over 90 different platforms simultaneously!
+Backtainer uses the powerful [Apprise](https://github.com/caronc/apprise/wiki) library, allowing you to send backup success/failure alerts to over 90 different platforms simultaneously!
 
 1. Go to **Settings > Notifications**.
 2. Expand the **Apprise (Universal)** section.
@@ -131,6 +147,8 @@ Backtainer uses the powerful **Apprise** library, allowing you to send backup su
    > 💡 **Gmail Note:** Google blocks regular passwords for third-party apps. You must generate an **App Password** in your Google Account (under 2-Step Verification) and use that 16-character code as your password in the URL. Make sure to remove any spaces from the App Password! If your email is `user@gmail.com`, your URL should be formatted exactly like: `mailto://user:16charpassword@gmail.com`.
 
 4. Click **Send Test** to verify your setup, then click **Save All Notifications**.
+
+> 📖 **More Info:** For a full list of supported services and their URL formats, visit the [Apprise Documentation](https://github.com/caronc/apprise/wiki).
 
 ---
 

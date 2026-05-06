@@ -51,7 +51,7 @@
                                 <input type="password" id="secret-key-input" class="form-input" style="flex: 1;">
                                 <button class="btn btn-primary" onclick="saveSecretKey(document.getElementById('secret-key-input').value)">Save</button>
                             </div>
-                            <p class="form-hint">This key must match the <code>SECRET_KEY</code> environment variable.</p>
+                            <p class="form-hint">This key must match the <code>SECRET_KEY</code> environment variable. <a href="https://github.com/jeangirgis/backup-portainer#step-1-deploy-backtainer-via-portainer" target="_blank" style="color: var(--primary); text-decoration: underline;">Setup Guide</a></p>
                         </div>
                     </div>
                 </details>
@@ -151,8 +151,9 @@
                         </div>
                         <div class="form-row">
                             <div class="form-group">
-                                <label class="form-label">Endpoint URL <span style="color: var(--text-muted); font-size: 0.6rem; text-transform: none;">(MinIO / custom)</span></label>
+                                <label class="form-label">Endpoint URL <span style="color: var(--text-muted); font-size: 0.6rem; text-transform: none;">(MinIO / Cloudflare R2)</span></label>
                                 <input type="text" class="form-input" id="s3-endpoint" placeholder="https://minio.example.com">
+                                <p class="form-hint">Cloudflare R2? Use your <strong>S3 API</strong> endpoint from the bucket settings.</p>
                             </div>
                             <div class="form-group">
                                 <label class="form-label">Prefix</label>
@@ -205,7 +206,7 @@
                         <div class="form-group">
                             <label class="form-label">Service Account JSON Key</label>
                             <textarea class="form-input" id="gdrive-credentials" placeholder='{"type": "service_account", "project_id": "...", ...}'></textarea>
-                            <p class="form-hint">Paste the full JSON key from Google Cloud Console → IAM → Service Accounts.</p>
+                            <p class="form-hint">Paste the full JSON key from <a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" style="color: var(--primary); text-decoration: underline;">Google Cloud Console</a>.</p>
                         </div>
                     </div>
 
@@ -242,7 +243,7 @@
                             <div class="form-group">
                                 <label class="form-label">Apprise URLs</label>
                                 <textarea class="form-input" id="apprise-urls" rows="3" placeholder="discord://webhook_id/webhook_token&#10;mailto://user:pass@gmail.com"></textarea>
-                                <p class="form-hint">Enter Apprise URLs separated by commas or newlines. Supports 90+ services like Discord, Matrix, Gotify, Pushbullet, etc.</p>
+                                <p class="form-hint">Enter Apprise URLs separated by commas or newlines. Supports 90+ services like Discord, Matrix, Gotify, Pushbullet, etc. <a href="https://github.com/caronc/apprise/wiki" target="_blank" style="color: var(--primary); text-decoration: underline;">Full Documentation</a></p>
                             </div>
                             <div style="display: flex; justify-content: flex-end; margin-top: 0.5rem;">
                                 <button class="test-btn" onclick="testNotification('apprise')">📤 Send Test</button>
@@ -263,7 +264,7 @@
         </main>
                 <footer class="app-footer">
             <p style="text-align: center; font-size: 0.75rem; color: var(--text-muted);">
-                Backtainer v2.5.0
+                Backtainer v2.5.0 • <a href="https://github.com/jeangirgis/backup-portainer" target="_blank" style="color: inherit; text-decoration: underline;">Star this repo on GitHub ⭐</a>
             </p>
         </footer>
 

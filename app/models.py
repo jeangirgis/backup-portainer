@@ -13,6 +13,7 @@ class BackupJob(Base):
     stack_name: Mapped[str] = mapped_column(String)
     status: Mapped[str] = mapped_column(String, default="pending")  # pending, running, success, failed
     storage_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    storage_backend: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

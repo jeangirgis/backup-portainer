@@ -97,6 +97,7 @@ class BackupEngine:
                 # Finalize
                 job.status = "success"
                 job.storage_path = storage_path
+                job.storage_backend = self.settings.STORAGE_BACKEND
                 job.size_bytes = bundle_path.stat().st_size
                 job.completed_at = datetime.utcnow()
                 await db.commit()

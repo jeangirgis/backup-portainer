@@ -31,6 +31,7 @@ class BackupJobSchema(BaseModel):
     stack_name: str
     status: str
     storage_path: str | None
+    storage_backend: str | None
     size_bytes: int | None
     error_message: str | None
     created_at: datetime
@@ -92,6 +93,7 @@ async def upload_backup_file(file: UploadFile = File(...), db: AsyncSession = De
         stack_name=stack_name,
         status="success",
         storage_path=storage_path,
+        storage_backend=settings.STORAGE_BACKEND,
         size_bytes=size_bytes,
         triggered_by="manual (uploaded)",
         created_at=datetime.utcnow(),
@@ -164,6 +166,17 @@ async def list_backups(request: Request, db: AsyncSession = Depends(get_db)):
                 short_error = job.error_message[:80] + "..." if len(job.error_message) > 80 else job.error_message
                 error_html = f'<div class="error-hint">{short_error}</div>'
 
+            # Storage display
+            storage_type = job.storage_backend or "local"
+            storage_icons = {
+                "local": "📁",
+                "s3": "☁️",
+                "sftp": "🔒",
+                "gdrive": "📤"
+            }
+            storage_icon = storage_icons.get(storage_type, "📁")
+            storage_html = f'<div style="display: flex; align-items: center; gap: 0.4rem;"><span style="font-size: 1rem;">{storage_icon}</span> <span style="text-transform: capitalize; font-size: 0.8rem;">{storage_type}</span></div>'
+
             html += f"""
             <tr id="job-{job.id}">
                 <td>
@@ -171,6 +184,7 @@ async def list_backups(request: Request, db: AsyncSession = Depends(get_db)):
                     {error_html}
                 </td>
                 <td><span class="status-badge {status_class}">{job.status.upper()}</span></td>
+                <td>{storage_html}</td>
                 <td>{size_mb}</td>
                 <td>{trigger_html}</td>
                 <td style="color: var(--text-muted);">{date_str}</td>
@@ -188,7 +202,7 @@ async def list_backups(request: Request, db: AsyncSession = Depends(get_db)):
             </tr>
             """
         if not html:
-            html = """<tr><td colspan="6" style="text-align: center; padding: 4rem 1rem;">
+            html = """<tr><td colspan="7" style="text-align: center; padding: 4rem 1rem;">
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--text-muted); opacity: 0.3; margin-bottom: 1rem;">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
                 </svg>

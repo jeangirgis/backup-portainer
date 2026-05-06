@@ -55,6 +55,7 @@
                         <tr>
                             <th>Stack Name</th>
                             <th>Status</th>
+                            <th>Storage</th>
                             <th>Size</th>
                             <th>Triggered By</th>
                             <th>Date</th>
@@ -63,7 +64,7 @@
                     </thead>
                     <tbody id="backup-list" hx-get="/api/backups" hx-trigger="load">
                         <tr>
-                            <td colspan="6" style="text-align: center; padding: 3rem;">
+                            <td colspan="7" style="text-align: center; padding: 3rem;">
                                 <div class="spinner" style="margin: 0 auto 1rem;"></div>
                                 <span style="color: var(--text-muted);">Loading history...</span>
                             </td>
@@ -74,7 +75,7 @@
         </main>
                 <footer class="app-footer">
             <p style="text-align: center; font-size: 0.75rem; color: var(--text-muted);">
-                Backtainer v2.5.0
+                Backtainer v2.5.0 • <a href="https://github.com/jeangirgis/backup-portainer" target="_blank" style="color: inherit; text-decoration: underline;">Star this repo on GitHub ⭐</a>
             </p>
         </footer>
 
