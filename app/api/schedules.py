@@ -49,6 +49,13 @@ class ScheduleCreate(BaseModel):
     retention_days: int = 7
 
 
+class ScheduleUpdate(BaseModel):
+    stack_id: str
+    stack_name: str
+    cron_expression: str
+    retention_days: int
+
+
 @router.get("", response_model=List[ScheduleSchema])
 async def list_schedules(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Schedule))
@@ -77,6 +84,10 @@ async def list_schedules(request: Request, db: AsyncSession = Depends(get_db)):
                 <td>{retention_label}</td>
                 <td><span class="status-badge {status_class}">{status_text}</span></td>
                 <td>
+                    <button class="btn btn-sm btn-outline"
+                            onclick="editSchedule('{s.id}', '{s.stack_id}', '{s.stack_name}', '{s.cron_expression}', {s.retention_days})">
+                        Edit
+                    </button>
                     <button class="btn btn-sm btn-danger"
                             hx-delete="/api/schedules/{s.id}" hx-target="#schedule-{s.id}" hx-swap="outerHTML"
                             hx-confirm="Delete this schedule?">
@@ -125,6 +136,10 @@ async def create_schedule(data: ScheduleCreate, request: Request, db: AsyncSessi
                 <td>{retention_label}</td>
                 <td><span class="status-badge status-running">Active</span></td>
                 <td>
+                    <button class="btn btn-sm btn-outline"
+                            onclick="editSchedule('{sch.id}', '{sch.stack_id}', '{sch.stack_name}', '{sch.cron_expression}', {sch.retention_days})">
+                        Edit
+                    </button>
                     <button class="btn btn-sm btn-danger"
                             hx-delete="/api/schedules/{sch.id}" hx-target="#schedule-{sch.id}" hx-swap="outerHTML"
                             hx-confirm="Delete this schedule?">
@@ -148,3 +163,72 @@ async def delete_schedule(schedule_id: str, db: AsyncSession = Depends(get_db)):
     await db.delete(sch)
     await db.commit()
     return HTMLResponse(content="")
+
+@router.put("/{schedule_id}", response_model=ScheduleSchema)
+async def update_schedule(schedule_id: str, data: ScheduleUpdate, request: Request, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Schedule).where(Schedule.id == schedule_id))
+    sch = result.scalar_one_or_none()
+    if not sch:
+        if "hx-request" in request.headers:
+            return HTMLResponse(
+                content=f'<tr><td colspan="5"><div class="toast toast-error">❌ Schedule not found</div></td></tr>',
+                status_code=404,
+            )
+        raise HTTPException(status_code=404, detail="Schedule not found")
+
+    # Validate cron
+    try:
+        from apscheduler.triggers.cron import CronTrigger
+        CronTrigger.from_crontab(data.cron_expression)
+    except Exception:
+        if "hx-request" in request.headers:
+            return HTMLResponse(
+                content=f'<tr><td colspan="5"><div class="toast toast-error">❌ Invalid cron expression: {data.cron_expression}</div></td></tr>',
+                status_code=200,
+            )
+        raise HTTPException(status_code=400, detail="Invalid cron expression")
+
+    sch.stack_id = data.stack_id
+    sch.stack_name = data.stack_name
+    sch.cron_expression = data.cron_expression
+    sch.retention_days = data.retention_days
+    
+    await db.commit()
+    await db.refresh(sch)
+    
+    # Update live scheduler job
+    if sch.enabled:
+        live_scheduler.add_job(sch)
+
+    # Return HTML row for HTMX
+    if "hx-request" in request.headers:
+        freq_label = cron_to_human(sch.cron_expression)
+        retention_label = f"{sch.retention_days} days" if sch.retention_days > 0 else "Forever"
+        status_class = "status-running" if sch.enabled else "status-stopped"
+        status_text = "Active" if sch.enabled else "Paused"
+        last_run = sch.last_run_at.strftime("%Y-%m-%d %H:%M") if sch.last_run_at else "Never"
+        return HTMLResponse(content=f"""
+            <tr id="schedule-{sch.id}">
+                <td>
+                    <strong>{sch.stack_name}</strong>
+                    <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.15rem;">Last run: {last_run}</div>
+                </td>
+                <td>{freq_label}</td>
+                <td>{retention_label}</td>
+                <td><span class="status-badge {status_class}">{status_text}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline"
+                            onclick="editSchedule('{sch.id}', '{sch.stack_id}', '{sch.stack_name}', '{sch.cron_expression}', {sch.retention_days})">
+                        Edit
+                    </button>
+                    <button class="btn btn-sm btn-danger"
+                            hx-delete="/api/schedules/{sch.id}" hx-target="#schedule-{sch.id}" hx-swap="outerHTML"
+                            hx-confirm="Delete this schedule?">
+                        Delete
+                    </button>
+                </td>
+            </tr>
+        """)
+
+    return sch
+

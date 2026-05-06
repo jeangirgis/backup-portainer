@@ -56,8 +56,8 @@
 
                 <!-- New Schedule Form -->
                 <div class="card">
-                    <h3 style="margin-bottom: 1.5rem;">➕ New Schedule</h3>
-                    <form id="schedule-form" hx-post="/api/schedules" hx-target="#schedule-list" hx-swap="beforeend" hx-ext="json-enc" hx-on::after-request="this.reset(); document.getElementById('custom-cron-group').style.display='none';">
+                    <h3 id="form-title" style="margin-bottom: 1.5rem;">➕ New Schedule</h3>
+                    <form id="schedule-form" hx-post="/api/schedules" hx-target="#schedule-list" hx-swap="beforeend" hx-ext="json-enc" hx-on::after-request="resetForm()">
 
                         <!-- Stack Selection -->
                         <div class="form-group">
@@ -133,9 +133,14 @@
                             <input type="hidden" name="retention_days" id="retention-input" value="7">
                         </div>
 
-                        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
-                            Create Schedule
-                        </button>
+                        <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                            <button type="submit" id="submit-btn" class="btn btn-primary" style="flex: 1;">
+                                Create Schedule
+                            </button>
+                            <button type="button" id="cancel-btn" class="btn btn-outline" style="display: none;" onclick="resetForm()">
+                                Cancel
+                            </button>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -172,6 +177,69 @@
             document.querySelectorAll('.ret-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             document.getElementById('retention-input').value = btn.dataset.days;
+        }
+
+        function editSchedule(id, stack_id, stack_name, cron, retention) {
+            const form = document.getElementById('schedule-form');
+            form.stack_id.value = stack_id;
+            form.stack_name.value = stack_name;
+            
+            // set cron
+            let foundFreq = false;
+            document.querySelectorAll('.freq-btn').forEach(btn => {
+                if (btn.dataset.cron === cron) {
+                    selectFreq(btn);
+                    foundFreq = true;
+                }
+            });
+            if (!foundFreq) {
+                const customBtn = document.querySelector('.freq-btn[data-cron="custom"]');
+                selectFreq(customBtn);
+                document.getElementById('custom-cron-input').value = cron;
+                document.getElementById('cron-input').value = cron;
+            }
+
+            // set retention
+            document.querySelectorAll('.ret-btn').forEach(btn => {
+                if (btn.dataset.days == retention) {
+                    selectRetention(btn);
+                }
+            });
+
+            // update form to PUT
+            form.setAttribute('hx-put', `/api/schedules/${id}`);
+            form.removeAttribute('hx-post');
+            form.setAttribute('hx-target', `#schedule-${id}`);
+            form.setAttribute('hx-swap', 'outerHTML');
+            htmx.process(form);
+
+            document.getElementById('form-title').innerText = '✏️ Edit Schedule';
+            document.getElementById('submit-btn').innerText = 'Update Schedule';
+            document.getElementById('cancel-btn').style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetForm() {
+            const form = document.getElementById('schedule-form');
+            form.reset();
+            document.getElementById('custom-cron-group').style.display = 'none';
+            
+            // Default select
+            const defaultFreq = document.querySelector('.freq-btn[data-cron="0 2 * * *"]');
+            if(defaultFreq) selectFreq(defaultFreq);
+            
+            const defaultRet = document.querySelector('.ret-btn[data-days="7"]');
+            if(defaultRet) selectRetention(defaultRet);
+
+            form.setAttribute('hx-post', '/api/schedules');
+            form.removeAttribute('hx-put');
+            form.setAttribute('hx-target', '#schedule-list');
+            form.setAttribute('hx-swap', 'beforeend');
+            htmx.process(form);
+
+            document.getElementById('form-title').innerText = '➕ New Schedule';
+            document.getElementById('submit-btn').innerText = 'Create Schedule';
+            document.getElementById('cancel-btn').style.display = 'none';
         }
     </script>
 </body>
