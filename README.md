@@ -14,19 +14,7 @@ A lightweight, self-hosted companion for Portainer that provides automated and o
 - **Multiple Storage Backends:** Store backups locally, securely in S3-compatible storage (AWS, MinIO, Cloudflare R2), SFTP, or Google Drive (Shared Drives).
 - **Modern UI:** A stunning HTMX-powered dashboard with Dark and Light modes.
 
-## 📸 Screenshots
 
-| Dashboard | History |
-|---|---|
-| ![Dashboard](assets/dashboard.png) | ![History](assets/history.png) |
-
-| Schedules | Logs |
-|---|---|
-| ![Schedules](assets/schedules.png) | ![Logs](assets/logs.png) |
-
-| Settings (General) | Settings (Storage) | Settings (Notifications) |
-|---|---|---|
-| ![Settings General](assets/settings-general.png) | ![Settings Storage](assets/settings-storage.png) | ![Settings Notifications](assets/settings-notifications.png) |
 
 ---
 
@@ -157,4 +145,4 @@ Backtainer uses the powerful [Apprise](https://github.com/caronc/apprise/wiki) l
 Click the **🌓 Theme** button in the top right corner to toggle between Dark Mode (default) and Light Mode to suit your preference!
 
 ---
-**Backtainer v2.5.0** — Taking the stress out of self-hosting.
+**Backtainer v1.0.0** — Taking the stress out of self-hosting.

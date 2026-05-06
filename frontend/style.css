@@ -1341,7 +1341,8 @@ select.form-input {
     background: rgba(255, 255, 255, 0.5) !important;
 }
 
-[data-theme="light"] .modal {
+[data-theme="light"] .modal,
+[data-theme="light"] .confirm-dialog {
     background: #ffffff;
 }
 

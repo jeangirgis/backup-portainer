@@ -77,7 +77,7 @@ async def upload_backup_file(file: UploadFile = File(...), db: AsyncSession = De
     except Exception as e:
         logger.error(f"Failed to upload to storage backend: {e}")
         # Even if storage upload fails, we keep the local file and record it if local is the backend
-        storage_path = file.filename if settings.STORAGE_BACKEND == "local" else None
+        storage_path = file.filename if settings.get_effective_storage_backend() == "local" else None
         
         if not storage_path:
             # If not local and it failed to upload to remote, we should probably fail
@@ -93,7 +93,7 @@ async def upload_backup_file(file: UploadFile = File(...), db: AsyncSession = De
         stack_name=stack_name,
         status="success",
         storage_path=storage_path,
-        storage_backend=settings.STORAGE_BACKEND,
+        storage_backend=settings.get_effective_storage_backend(),
         size_bytes=size_bytes,
         triggered_by="manual (uploaded)",
         created_at=datetime.utcnow(),
