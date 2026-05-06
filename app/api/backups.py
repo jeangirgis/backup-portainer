@@ -167,7 +167,12 @@ async def list_backups(request: Request, db: AsyncSession = Depends(get_db)):
                 error_html = f'<div class="error-hint">{short_error}</div>'
 
             # Storage display
-            storage_type = job.storage_backend or "local"
+            storage_type = job.storage_backend
+            if not storage_type or storage_type == "local":
+                if job.storage_path and not job.storage_path.endswith(".tar.gz"):
+                    storage_type = "gdrive"
+                else:
+                    storage_type = "local"
             storage_icons = {
                 "local": "📁",
                 "s3": "☁️",
