@@ -63,6 +63,9 @@ function showLoginModal(message) {
 
 // --- Custom Confirmation Modals ---
 document.body.addEventListener('htmx:confirm', function(evt) {
+    // Only intercept requests that actually have an hx-confirm attribute
+    if (!evt.detail.question) return;
+    
     evt.preventDefault();
     
     // Create the dialog if it doesn't exist
