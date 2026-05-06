@@ -90,23 +90,45 @@ async def list_stacks(request: Request):
                     status_class = "status-running" if s.status == "running" else "status-stopped"
                     html += f"""
                     <div class="card stack-card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                            <span class="status-badge {status_class}">{s.status.upper()}</span>
-                            <span style="font-size: 0.75rem; color: var(--text-muted);">ID: {s.id}</span>
+                        <div class="stack-card-grid">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <span class="status-badge {status_class}">{s.status.upper()}</span>
+                                <span style="font-size: 0.75rem; color: var(--text-muted);">ID: {s.id}</span>
+                            </div>
+                            <h3 style="margin-bottom: 0.75rem; font-size: 1.25rem;">{s.name}</h3>
+                            <div class="stack-meta">
+                                <span>📦 {s.container_count} container{'s' if s.container_count != 1 else ''}</span>
+                                <span>💾 {s.volume_count} volume{'s' if s.volume_count != 1 else ''}</span>
+                            </div>
+                            <div id="stack-actions-{s.id}" style="margin-top: 1rem;">
+                                <button class="btn btn-primary" style="width: 100%;"
+                                        hx-post="/api/backups/{s.id}" 
+                                        hx-target="#stack-actions-{s.id}"
+                                        hx-indicator="#spinner-{s.id}">
+                                    <div id="spinner-{s.id}" class="spinner htmx-indicator" style="width: 1.2rem; height: 1.2rem; border-width: 2px;"></div>
+                                    <span>Backup Now</span>
+                                </button>
+                            </div>
                         </div>
-                        <h3 style="margin-bottom: 0.75rem; font-size: 1.25rem;">{s.name}</h3>
-                        <div class="stack-meta">
-                            <span>📦 {s.container_count} container{'s' if s.container_count != 1 else ''}</span>
-                            <span>💾 {s.volume_count} volume{'s' if s.volume_count != 1 else ''}</span>
-                        </div>
-                        <div id="stack-actions-{s.id}" style="margin-top: 1rem;">
-                            <button class="btn btn-primary" style="width: 100%;"
-                                    hx-post="/api/backups/{s.id}" 
-                                    hx-target="#stack-actions-{s.id}"
-                                    hx-indicator="#spinner-{s.id}">
-                                <div id="spinner-{s.id}" class="spinner htmx-indicator" style="width: 1.2rem; height: 1.2rem; border-width: 2px;"></div>
-                                <span>Backup Now</span>
-                            </button>
+                        <div class="stack-card-list">
+                            <div class="stack-list-info">
+                                <span class="status-badge {status_class}" style="padding: 0.25rem 0.5rem; font-size: 0.65rem;">{s.status.upper()}</span>
+                                <strong style="font-size: 1rem;">{s.name}</strong>
+                                <span style="font-size: 0.7rem; color: var(--text-muted);">ID: {s.id}</span>
+                            </div>
+                            <div class="stack-list-meta">
+                                <span>📦 {s.container_count}</span>
+                                <span>💾 {s.volume_count}</span>
+                            </div>
+                            <div id="stack-actions-list-{s.id}" class="stack-list-action">
+                                <button class="btn btn-primary btn-sm"
+                                        hx-post="/api/backups/{s.id}" 
+                                        hx-target="#stack-actions-list-{s.id}"
+                                        hx-indicator="#spinner-list-{s.id}">
+                                    <div id="spinner-list-{s.id}" class="spinner htmx-indicator" style="width: 1rem; height: 1rem; border-width: 2px;"></div>
+                                    <span>Backup Now</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                     """

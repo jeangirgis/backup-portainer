@@ -484,6 +484,97 @@ input:focus {
     flex-direction: column;
 }
 
+/* Layout Toggle */
+.layout-toggle {
+    display: flex;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.layout-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 0.4rem 0.6rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.layout-btn:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.layout-btn.active {
+    color: var(--primary);
+    background: rgba(139, 92, 246, 0.15);
+}
+
+.layout-btn + .layout-btn {
+    border-left: 1px solid var(--border);
+}
+
+/* Grid / List View Visibility */
+.grid .stack-card-list { display: none; }
+.grid .stack-card-grid { display: block; }
+
+.stack-list .stack-card-list { display: flex; }
+.stack-list .stack-card-grid { display: none; }
+
+/* Stack List Layout */
+.stack-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.stack-list .stack-card {
+    padding: 1rem 1.5rem;
+    border-radius: 1rem;
+}
+
+.stack-list .stack-card:hover {
+    transform: translateY(-2px);
+}
+
+.stack-card-list {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    width: 100%;
+}
+
+.stack-list-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.stack-list-info strong {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.stack-list-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.stack-list-action {
+    flex-shrink: 0;
+}
+
 /* Toast Notifications */
 .toast {
     padding: 1rem 1.25rem;
