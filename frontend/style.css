@@ -316,12 +316,11 @@ input:focus {
 
 /* HTMX specific */
 .htmx-indicator {
-    opacity: 0;
-    transition: opacity 0.2s ease;
+    display: none;
 }
 .htmx-request .htmx-indicator,
 .htmx-indicator.htmx-request {
-    opacity: 1;
+    display: inline-block;
 }
 .htmx-request.btn {
     opacity: 0.7;
